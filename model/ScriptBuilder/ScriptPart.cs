@@ -150,12 +150,13 @@ namespace SchemaZen.model.ScriptBuilder
 			{
 				foreach (var value in PotentialValues)
 				{
-					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase))
+					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase)) // TODO: should it also peek at whether the next script part matches, so that "incomplete" values are not found e.g. possible value "test", script value "testing"... i.e. to assert that the position of the next part is the end of this match
 					{
 						setVariable(Name, script.Substring(0, value.Length));
 						return script.Substring(value.Length);
 					}
 				}
+				// TODO: should it attempt to find the next script part instead of aborting? might be useful if we later need to be able to know we found a part that was invalid, and/or to skip over the rest of the related script parts, to properly report an error and process the rest of the script as well as possible...
 				return null;
 			} else
 			{
