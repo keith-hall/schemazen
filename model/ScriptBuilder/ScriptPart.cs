@@ -185,7 +185,7 @@ namespace SchemaZen.model.ScriptBuilder
 			if (!(value is string))
 				throw new FormatException(string.Format("Variable '{0}' is not a string.", Name));
 			if (PotentialValues != null && PotentialValues.Any() && !PotentialValues.Contains((string)value, StringComparer.InvariantCultureIgnoreCase))
-				throw new FormatException(string.Format("Variable '{0}' does not match any of the expected values. Found value: '{1}'", Name, value));
+				throw new FormatException(string.Format("Variable '{0}' does not match any of the expected values. Found value: '{1}' Allowed values: '{2}'", Name, value, string.Join("|", PotentialValues)));
 			
 			return (string)value;
 		}
