@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using SchemaZen.model.ScriptBuilder;
 
 namespace SchemaZen.model {
 	public class ForeignKey : INameable {
@@ -14,7 +15,8 @@ namespace SchemaZen.model {
 		public Table RefTable;
 		public Table Table;
 
-		private const string defaultRules = "NO ACTION|RESTRICT";
+		private const string defaultRules = @"\A\z|NO ACTION|RESTRICT";
+		private const string possibleRules = @"NO ACTION|RESTRICT|CASCADE|SET NULL|SET DEFAULT";
 
 		public ForeignKey(string name) {
 			Name = name;
@@ -45,27 +47,95 @@ namespace SchemaZen.model {
 			}
 		}
 
-		public string ScriptCreate() {
+		public static IEnumerable<ScriptPart> GetScriptComponents()
+		{
+			yield return new ConstPart { Text = "ALTER" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "TABLE" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "[" };
+			yield return new VariablePart { Name = "Table.Owner" };
+			yield return new ConstPart { Text = "].[" };
+			yield return new VariablePart { Name = "Table.Name" };
+			yield return new ConstPart { Text = "]" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "WITH" };
+			yield return new WhitespacePart();
+			yield return new VariablePart { Name = "Check", PotentialValues = new[] { "CHECK", "NOCHECK" } };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "ADD" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "CONSTRAINT" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "[" };
+			yield return new VariablePart { Name = "Name" };
+			yield return new ConstPart { Text = "]" };
+			yield return new WhitespacePart { NewLinePreferred = true };
+			yield return new WhitespacePart { PreferredCount = 3 };
+			yield return new ConstPart { Text = "FOREIGN KEY(" };
+			yield return new MultipleOccurancesPart { Name = "Columns", Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
+			yield return new ConstPart { Text = ")" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "REFERENCES" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "[" };
+			yield return new VariablePart { Name = "RefTable.Owner" };
+			yield return new ConstPart { Text = "].[" };
+			yield return new VariablePart { Name = "RefTable.Name" };
+			yield return new ConstPart { Text = "]" };
+			yield return new WhitespacePart();
+			yield return new ConstPart { Text = "(" };
+			yield return new MultipleOccurancesPart { Name = "RefColumns", Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
+			yield return new ConstPart { Text = ")" };
+			yield return new WhitespacePart { NewLinePreferred = true };
+
+			yield return new MaybePart { Variable = "OnUpdate", SkipIfRegexMatch = defaultRules, Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ON" }, new WhitespacePart(), new ConstPart { Text = "UPDATE" }, new WhitespacePart(), new VariablePart { Name = "OnUpdate", PotentialValues = possibleRules.Split('|') }, new WhitespacePart { NewLinePreferred = true } } };
+			yield return new MaybePart { Variable = "OnDelete", SkipIfRegexMatch = defaultRules, Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ON" }, new WhitespacePart(), new ConstPart { Text = "DELETE" }, new WhitespacePart(), new VariablePart { Name = "OnDelete", PotentialValues = possibleRules.Split('|') }, new WhitespacePart { NewLinePreferred = true } } };
+			yield return new MaybePart
+			{
+				Variable = "Check",
+				SkipIfRegexMatch = @"\ACHECK\Z",
+				Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ALTER" }, new WhitespacePart(), new ConstPart { Text = "TABLE" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Table.Owner" }, new ConstPart { Text = "].[" }, new VariablePart { Name = "Table.Name" }, new ConstPart { Text = "]" }, new WhitespacePart(), new VariablePart { Name = "Check", PotentialValues = new string[] { "NOCHECK" } }, new WhitespacePart(), new ConstPart { Text = "CONSTRAINT" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Name" }, new ConstPart { Text = "]" }, new WhitespacePart { NewLinePreferred = true } }
+			};
+
+		}
+
+		public static ForeignKey FromScript(string script)
+		{
+			var d = ScriptPart.VariablesFromScript(GetScriptComponents(), script);
+			var fk = new ForeignKey((string)d["Name"]);
+			fk.Table = new Table((string)d["Table.Owner"], (string)d["Table.Name"]);
+			fk.Columns = (List<string>)d["Columns"];
+			fk.RefTable = new Table((string)d["RefTable.Owner"], (string)d["RefTable.Name"]);
+			fk.RefColumns = (List<string>)d["RefColumns"];
+			fk.Check = ((string)d["Check"]).Equals("CHECK", StringComparison.InvariantCultureIgnoreCase);
+			if (d.ContainsKey("OnUpdate"))
+				fk.OnUpdate = (string)d["OnUpdate"];
+			if (d.ContainsKey("OnDelete"))
+				fk.OnDelete = (string)d["OnDelete"];
+			
+			return fk;
+		}
+
+		public string ScriptCreate ()
+		{
 			AssertArgNotNull(Table, "Table");
 			AssertArgNotNull(Columns, "Columns");
 			AssertArgNotNull(RefTable, "RefTable");
 			AssertArgNotNull(RefColumns, "RefColumns");
 
-			var text = new StringBuilder();
-			text.AppendFormat("ALTER TABLE [{0}].[{1}] WITH {2} ADD CONSTRAINT [{3}]\r\n", Table.Owner, Table.Name, CheckText,
-				Name);
-			text.AppendFormat("   FOREIGN KEY([{0}]) REFERENCES [{1}].[{2}] ([{3}])\r\n", string.Join("], [", Columns.ToArray()),
-				RefTable.Owner, RefTable.Name, string.Join("], [", RefColumns.ToArray()));
-			if (!string.IsNullOrEmpty(OnUpdate) && !defaultRules.Split('|').Contains(OnUpdate)) {
-				text.AppendFormat("   ON UPDATE {0}\r\n", OnUpdate);
-			}
-			if (!string.IsNullOrEmpty(OnDelete) && !defaultRules.Split('|').Contains(OnDelete)) {
-				text.AppendFormat("   ON DELETE {0}\r\n", OnDelete);
-			}
-			if (!Check) {
-				text.AppendFormat("   ALTER TABLE [{0}].[{1}] NOCHECK CONSTRAINT [{2}]\r\n", Table.Owner, Table.Name, Name);
-			}
-			return text.ToString();
+			var d = new Dictionary<string, object>();
+			d["Name"] = Name;
+			d["Table.Owner"] = Table.Owner;
+			d["Table.Name"] = Table.Name;
+			d["Columns"] = Columns;
+			d["RefTable.Owner"] = RefTable.Owner;
+			d["RefTable.Name"] = RefTable.Name;
+			d["RefColumns"] = RefColumns;
+			d["Check"] = CheckText;
+			d["OnUpdate"] = OnUpdate ?? string.Empty;
+			d["OnDelete"] = OnDelete ?? string.Empty;
+			return ScriptPart.ScriptFromComponents(GetScriptComponents(), d);
 		}
 
 		public string ScriptDrop() {
