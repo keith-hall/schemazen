@@ -93,6 +93,7 @@ namespace SchemaZen.model {
 
 			yield return new MaybePart { Variable = "OnUpdate", SkipIfRegexMatch = defaultRules, Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ON" }, new WhitespacePart(), new ConstPart { Text = "UPDATE" }, new WhitespacePart(), new VariablePart { Name = "OnUpdate", PotentialValues = possibleRules.Split('|') }, new WhitespacePart { NewLinePreferred = true } } };
 			yield return new MaybePart { Variable = "OnDelete", SkipIfRegexMatch = defaultRules, Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ON" }, new WhitespacePart(), new ConstPart { Text = "DELETE" }, new WhitespacePart(), new VariablePart { Name = "OnDelete", PotentialValues = possibleRules.Split('|') }, new WhitespacePart { NewLinePreferred = true } } };
+			yield return new MaybePart { Variable = "OnUpdate", SkipIfRegexMatch = defaultRules, Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ON" }, new WhitespacePart(), new ConstPart { Text = "UPDATE" }, new WhitespacePart(), new VariablePart { Name = "OnUpdate", PotentialValues = possibleRules.Split('|') }, new WhitespacePart { NewLinePreferred = true } } }; // this is repeated in case the script has ON UPDATE and ON DELETE in the opposite order
 			yield return new MaybePart
 			{
 				Variable = "Check",
