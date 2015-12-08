@@ -30,7 +30,7 @@ namespace SchemaZen.model.ScriptBuilder
 				if (current != null && !(current is WhitespacePart && next is WhitespacePart)) // skip multiple consecutive whitespace parts
 				{
 					script = current.ConsumeScript(setVariable, remaining, next);
-					if (current is WhitespacePart && first)
+					if (first && current is WhitespacePart && script == null) // if the first script part is whitespace, then it is optional
 						script = remaining;
 				}
 				if (script != null)
@@ -108,12 +108,24 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
 		{
-			var match = ws.Match(script);
+			var match = ws.Match(script); // consume all whitespace, it doesn't matter about preferred amount/type here - allows more compatibility between SchemaZen versions in case of formatting changes etc.
 			if (match.Success)
 			{
 				return script.Substring(match.Length);
 			} else
 			{
+				if (next == null) // if it is the last of the script tokens, it is optional trailing whitespace
+					return script;
+				if (next is ConstPart)
+				{
+					// make whitespace optional if next character is a bracket or a comma
+					// TODO: should this also work if the previous character was one of these?
+					// TODO: probably should expand the range of characters to include all operators etc.
+					var nextText = ((ConstPart)next).Text;
+					var optionalIfFollowedBy = "()[],";
+					if (optionalIfFollowedBy.Contains(nextText.Substring(0, 1)))
+						return script;
+				}
 				return null;
 			}
 		}

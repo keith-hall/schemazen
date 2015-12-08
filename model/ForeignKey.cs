@@ -72,7 +72,9 @@ namespace SchemaZen.model {
 			yield return new ConstPart { Text = "]" };
 			yield return new WhitespacePart { NewLinePreferred = true };
 			yield return new WhitespacePart { PreferredCount = 3 };
-			yield return new ConstPart { Text = "FOREIGN KEY(" };
+			yield return new ConstPart { Text = "FOREIGN KEY" };
+			yield return new WhitespacePart ();
+			yield return new ConstPart { Text = "(" };
 			yield return new MultipleOccurancesPart { Variable = new VariablePart { Name = "Columns" }, Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
 			yield return new ConstPart { Text = ")" };
 			yield return new WhitespacePart();
@@ -95,7 +97,7 @@ namespace SchemaZen.model {
 			{
 				Variable = "Check",
 				SkipIfRegexMatch = @"\ACHECK\Z",
-				Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ALTER" }, new WhitespacePart(), new ConstPart { Text = "TABLE" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Table.Owner" }, new ConstPart { Text = "].[" }, new VariablePart { Name = "Table.Name" }, new ConstPart { Text = "]" }, new WhitespacePart(), new VariablePart { Name = "Check", PotentialValues = new string[] { "NOCHECK" } }, new WhitespacePart(), new ConstPart { Text = "CONSTRAINT" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Name" }, new ConstPart { Text = "]" }, new WhitespacePart { NewLinePreferred = true } }
+				Contents = new ScriptPart[] { new WhitespacePart { PreferredCount = 3 }, new ConstPart { Text = "ALTER" }, new WhitespacePart(), new ConstPart { Text = "TABLE" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Table.Owner" }, new ConstPart { Text = "].[" }, new VariablePart { Name = "Table.Name" }, new ConstPart { Text = "]" }, new WhitespacePart(), new VariablePart { Name = "Check"/*, PotentialValues = new string[] { "NOCHECK" }*/ }, new WhitespacePart(), new ConstPart { Text = "CONSTRAINT" }, new WhitespacePart(), new ConstPart { Text = "[" }, new VariablePart { Name = "Name" }, new ConstPart { Text = "]" }, new WhitespacePart { NewLinePreferred = true } }
 			};
 
 		}
