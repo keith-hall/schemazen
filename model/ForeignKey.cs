@@ -73,7 +73,7 @@ namespace SchemaZen.model {
 			yield return new WhitespacePart { NewLinePreferred = true };
 			yield return new WhitespacePart { PreferredCount = 3 };
 			yield return new ConstPart { Text = "FOREIGN KEY(" };
-			yield return new MultipleOccurancesPart { Name = "Columns", Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
+			yield return new MultipleOccurancesPart { Variable = new VariablePart { Name = "Columns" }, Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
 			yield return new ConstPart { Text = ")" };
 			yield return new WhitespacePart();
 			yield return new ConstPart { Text = "REFERENCES" };
@@ -85,7 +85,7 @@ namespace SchemaZen.model {
 			yield return new ConstPart { Text = "]" };
 			yield return new WhitespacePart();
 			yield return new ConstPart { Text = "(" };
-			yield return new MultipleOccurancesPart { Name = "RefColumns", Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
+			yield return new MultipleOccurancesPart { Variable = new VariablePart { Name = "RefColumns" }, Prefix = new[] { new ConstPart { Text = "[" } }, Suffix = new[] { new ConstPart { Text = "]" } }, Separator = new ScriptPart[] { new ConstPart { Text = "," }, new WhitespacePart() } };
 			yield return new ConstPart { Text = ")" };
 			yield return new WhitespacePart { NewLinePreferred = true };
 
