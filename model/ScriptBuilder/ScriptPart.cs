@@ -163,7 +163,7 @@ namespace SchemaZen.model.ScriptBuilder
 	{
 		private char _PreferredChar;
 		private int _PreferredCount;
-		private static Regex wsConsume = new Regex(@"\A\s+");
+		private static Regex wsConsume = new Regex(@"\A" + Database.SqlWhitespaceOrCommentRegex + "+");
 		private static Regex wsPeek = new Regex(@"\s");
 
 		public WhitespacePart(char PreferredChar = ' ', int PreferredCount = 1)
