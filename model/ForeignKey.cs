@@ -111,7 +111,7 @@ namespace SchemaZen.model {
 		{
 			var d = ScriptPart.VariablesFromScript(GetScriptComponents(), script);
 			if (db.FindForeignKey((string)d["Name"]) != null)
-				throw new InvalidOperationException(string.Format("Database model already contains the foriegn key named {0} that is defined in this script.", (string)d["Name"]));
+				throw new InvalidOperationException(string.Format("Database model already contains the foreign key named {0} that is defined in this script.", (string)d["Name"]));
 			var fk = new ForeignKey((string)d["Name"]);
 			fk.Table = db.FindTable((string)d["Table.Name"], (string)d["Table.Owner"]);
 			fk.Columns = (List<string>)d["Columns"];
