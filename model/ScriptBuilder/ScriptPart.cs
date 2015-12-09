@@ -154,7 +154,7 @@ namespace SchemaZen.model.ScriptBuilder
 			var length = 0;
 			if (PotentialValues != null && PotentialValues.Any())
 			{
-				foreach (var value in PotentialValues.OrderByDescending(s => s.Length)) // look for longest values first, in case some a potential value starts with the entirety of another potential value
+				foreach (var value in PotentialValues.OrderByDescending(s => s.Length)) // look for longest values first, in case a potential value starts with the entirety of another potential value
 				{
 					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase))
 					{

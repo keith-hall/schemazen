@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using SchemaZen.model;
+using SchemaZen.model.ScriptBuilder;
 
 namespace SchemaZen.test
 {
@@ -48,6 +49,15 @@ namespace SchemaZen.test
 			fk.OnDelete = "This value is not an allowed value";
 
 			var script = fk.ScriptCreate();
+		}
+
+		[Test]
+		[ExpectedException(typeof(FormatException))]
+		public void TestVariableInconsistentValue()
+		{
+			var components = new ScriptPart[] { new ConstPart { Text = "[" }, new VariablePart { Name = "Table.Owner" }, new ConstPart { Text = "].[" }, new VariablePart { Name = "Table.Name" }, new ConstPart { Text = "]" } };
+
+			var d = ScriptPart.VariablesFromScript(components.Concat(components), "[owner].[name][owner2].[name]");
 		}
 	}
 }
