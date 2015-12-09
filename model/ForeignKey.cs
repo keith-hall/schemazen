@@ -49,60 +49,43 @@ namespace SchemaZen.model {
 
 		public static IEnumerable<ScriptPart> GetScriptComponents()
 		{
-			yield return new ConstPart(Text: "ALTER");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "TABLE");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "[");
+			foreach (var part in ConstPart.FromString("ALTER TABLE ["))
+				yield return part;
 			yield return new VariablePart(Name: "Table.Owner");
 			yield return new ConstPart(Text: "].[");
 			yield return new VariablePart(Name: "Table.Name");
-			yield return new ConstPart(Text: "]");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "WITH");
-			yield return new WhitespacePart();
+			foreach (var part in ConstPart.FromString("] WITH "))
+				yield return part;
 			yield return new VariablePart(Name: "Check", PotentialValues: new[] { "CHECK", "NOCHECK" });
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "ADD");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "CONSTRAINT");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "[");
+			foreach (var part in ConstPart.FromString(" ADD CONSTRAINT ["))
+				yield return part;
 			yield return new VariablePart(Name: "Name");
-			yield return new ConstPart(Text: "]");
-			yield return new WhitespacePart(NewLinePreferred: true);
-			yield return new WhitespacePart(PreferredCount: 3);
-			yield return new ConstPart(Text: "FOREIGN KEY");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "(");
-			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "Columns"), Prefix: new[] { new ConstPart(Text: "[") }, Suffix: new[] { new ConstPart(Text: "]") }, Separator: new ScriptPart[] { new ConstPart(Text: ","), new WhitespacePart() });
-			yield return new ConstPart(Text: ")");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "REFERENCES");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "[");
+			foreach (var part in ConstPart.FromString("]" + Environment.NewLine + "   FOREIGN KEY ("))
+				yield return part;
+			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "Columns"), Prefix: ConstPart.FromString("["), Suffix: ConstPart.FromString("]"), Separator: ConstPart.FromString(", "));
+			foreach (var part in ConstPart.FromString(") REFERENCES ["))
+				yield return part;
 			yield return new VariablePart(Name: "RefTable.Owner");
 			yield return new ConstPart(Text: "].[");
 			yield return new VariablePart(Name: "RefTable.Name");
-			yield return new ConstPart(Text: "]");
-			yield return new WhitespacePart();
-			yield return new ConstPart(Text: "(");
-			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "RefColumns"), Prefix: new[] { new ConstPart(Text: "[") }, Suffix: new[] { new ConstPart(Text: "]") }, Separator: new ScriptPart[] { new ConstPart(Text: ","), new WhitespacePart() });
-			yield return new ConstPart(Text: ")");
-			yield return new WhitespacePart(NewLinePreferred: true);
-
+			foreach (var part in ConstPart.FromString("] ("))
+				yield return part;
+			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "RefColumns"), Prefix: ConstPart.FromString("["), Suffix: ConstPart.FromString("]"), Separator: ConstPart.FromString(", "));
+			foreach (var part in ConstPart.FromString(")" + Environment.NewLine))
+				yield return part;
+			
 			yield return new AnyOrderPart
 			(
 				Contents: new[] {
-					new MaybePart(Variable: "OnUpdate", SkipIfRegexMatch: defaultRules, Contents: new ScriptPart[] { new WhitespacePart ( PreferredCount: 3 ), new ConstPart(Text: "ON" ), new WhitespacePart(), new ConstPart(Text: "UPDATE" ), new WhitespacePart(), new VariablePart(Name: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(NewLinePreferred: true) }),
-					new MaybePart(Variable: "OnDelete", SkipIfRegexMatch: defaultRules, Contents: new ScriptPart[] { new WhitespacePart ( PreferredCount: 3 ), new ConstPart(Text: "ON" ), new WhitespacePart(), new ConstPart(Text: "DELETE" ), new WhitespacePart(), new VariablePart(Name: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(NewLinePreferred: true) })
+					new MaybePart(Variable: "OnUpdate", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON UPDATE ").Concat(new ScriptPart[] { new VariablePart(Name: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') })),
+					new MaybePart(Variable: "OnDelete", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON DELETE ").Concat(new ScriptPart[] { new VariablePart(Name: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') }))
 				}
 			);
 			yield return new MaybePart
 			(
 				Variable: "Check",
 				SkipIfRegexMatch: @"\ACHECK\Z",
-				Contents: new ScriptPart[] { new WhitespacePart(PreferredCount: 3), new ConstPart(Text: "ALTER"), new WhitespacePart(), new ConstPart(Text: "TABLE"), new WhitespacePart(), new ConstPart(Text: "["), new VariablePart(Name: "Table.Owner"), new ConstPart(Text: "].["), new VariablePart(Name: "Table.Name"), new ConstPart(Text: "]"), new WhitespacePart(), new VariablePart(Name: "Check", PotentialValues: new string[] { "NOCHECK" }), new WhitespacePart(), new ConstPart(Text: "CONSTRAINT"), new WhitespacePart(), new ConstPart(Text: "["), new VariablePart(Name: "Name"), new ConstPart(Text: "]"), new WhitespacePart(NewLinePreferred: true) }
+				Contents: ConstPart.FromString("   ALTER TABLE [").Concat(new ScriptPart[] { new VariablePart(Name: "Table.Owner"), new ConstPart(Text: "].["), new VariablePart(Name: "Table.Name"), new ConstPart(Text: "]"), new WhitespacePart(), new VariablePart(Name: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT [").Concat(new ScriptPart[] { new VariablePart(Name: "Name"), new ConstPart(Text: "]"), new WhitespacePart(PreferredChar: '\n') }))
 			);
 
 		}

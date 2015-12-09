@@ -118,20 +118,59 @@ namespace SchemaZen.model.ScriptBuilder
 		{
 			return script.IndexOf(_text, StringComparison.InvariantCultureIgnoreCase);
 		}
+
+		private static Regex ws = new Regex(@"\s+");
+		public static IEnumerable<ScriptPart> FromString(string Text)
+		{
+			Text = Text.Replace(Environment.NewLine, "\n");
+			var pos = 0;
+			foreach (var match in ws.Matches(Text).OfType<Match>())
+			{
+				var text = Text.Substring(pos, match.Index - pos);
+				if (text.Length > 0)
+					yield return new ConstPart(text);
+				char? prevChar = null;
+				int count = 0;
+				foreach (var chr in Text.Substring(match.Index, match.Length))
+				{
+					if (!prevChar.HasValue || prevChar.Value != chr)
+					{
+						if (count > 0)
+						{
+							yield return new WhitespacePart(PreferredCount: count, PreferredChar: prevChar.Value);
+						}
+						prevChar = chr;
+						count = 1;
+					}
+					else
+						count++;
+				}
+				if (count > 0)
+				{
+					yield return new WhitespacePart(PreferredCount: count, PreferredChar: prevChar.Value);
+				}
+
+				pos = match.Index + match.Length;
+			}
+			if (pos < Text.Length)
+				yield return new ConstPart(Text.Substring(pos));
+		}
 	}
 
 	public class WhitespacePart : ScriptPart
 	{
-		private bool _NewLinePreferred;
+		private char _PreferredChar;
 		private int _PreferredCount;
 		private static Regex wsConsume = new Regex(@"\A\s+");
 		private static Regex wsPeek = new Regex(@"\s");
 
-		public WhitespacePart(bool NewLinePreferred = false, int PreferredCount = 1)
+		public WhitespacePart(char PreferredChar = ' ', int PreferredCount = 1)
 		{
 			if (PreferredCount < 0)
 				throw new ArgumentOutOfRangeException(nameof(PreferredCount));
-			_NewLinePreferred = NewLinePreferred;
+			if (!wsConsume.IsMatch(PreferredChar.ToString()))
+				throw new ArgumentException("Value must be a whitespace character.", nameof(PreferredChar));
+			_PreferredChar = PreferredChar;
 			_PreferredCount = PreferredCount;
 		}
 
@@ -161,8 +200,7 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
-			var wsChar = _NewLinePreferred ? Environment.NewLine : " ";
-			return string.Join(string.Empty, Enumerable.Repeat(wsChar, _PreferredCount).ToArray());
+			return new string(Enumerable.Repeat(_PreferredChar, _PreferredCount).ToArray());
 		}
 
 		public override int PeekNextOccurrence(string script)
