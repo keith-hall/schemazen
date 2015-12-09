@@ -9,6 +9,7 @@ namespace SchemaZen.model.ScriptBuilder
 	public abstract class ScriptPart {
 		public abstract string GenerateScript(Dictionary<string, object> variables);
 		public abstract string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next);
+		public abstract int PeekNextOccurrence(string script);
 
 		public static string ScriptFromComponents(IEnumerable<ScriptPart> components, Dictionary<string, object> variables)
 		{
@@ -103,6 +104,11 @@ namespace SchemaZen.model.ScriptBuilder
 		{
 			return Text;
 		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			return script.IndexOf(Text, StringComparison.InvariantCultureIgnoreCase);
+		}
 	}
 
 	public class WhitespacePart : ScriptPart
@@ -110,6 +116,7 @@ namespace SchemaZen.model.ScriptBuilder
 		public bool NewLinePreferred;
 		public int PreferredCount = 1;
 		private static Regex ws = new Regex(@"\A\s+");
+		private static Regex wsPeek = new Regex(@"\s");
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
 		{
@@ -140,14 +147,18 @@ namespace SchemaZen.model.ScriptBuilder
 			var wsChar = NewLinePreferred ? Environment.NewLine : " ";
 			return string.Join(string.Empty, Enumerable.Repeat(wsChar, PreferredCount).ToArray());
 		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			var match = wsPeek.Match(script);
+			return match.Index;
+		}
 	}
 
 	public class VariablePart : ScriptPart
 	{
 		public string Name;
 		public string[] PotentialValues;
-
-		private static Regex ws = new Regex(@"\s+");
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
 		{
@@ -164,7 +175,7 @@ namespace SchemaZen.model.ScriptBuilder
 				}
 			}
 			// attempt to find the next script part
-			var nextPos = FindNextPart(next, script.Substring(length));
+			var nextPos = next == null ? script.Length : next.PeekNextOccurrence(script.Substring(length));
 			if (nextPos == -1)
 			{
 				throw new FormatException(string.Format("Unable to find script part {0} after variable '{1}'.", next, Name));
@@ -184,28 +195,6 @@ namespace SchemaZen.model.ScriptBuilder
 			}
 		}
 
-		protected int FindNextPart(ScriptPart next, string script)
-		{
-			// TODO: should we move this to the separate classes?
-			if (next == null) // variable value is until the end of the script
-			{
-				return script.Length;
-			}
-			else if (next is ConstPart) // variable value is until the first occurrence of the const part
-			{
-				return script.IndexOf(((ConstPart)next).Text, StringComparison.InvariantCultureIgnoreCase);
-			}
-			else if (next is WhitespacePart) // variable value is until the first occurrence of whitespace
-			{
-				var match = ws.Match(script);
-				return match.Index;
-			}
-			else
-			{
-				throw new NotImplementedException(string.Format("Unsupported script part {0} after variable '{1}'.", next, Name));
-			}
-		}
-
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
 			if (!variables.ContainsKey(Name))
@@ -217,6 +206,11 @@ namespace SchemaZen.model.ScriptBuilder
 				throw new ArgumentException(string.Format("Variable '{0}' does not match any of the expected values. Found value: '{1}' Allowed values: '{2}'", Name, value, string.Join("|", PotentialValues)));
 			
 			return (string)value;
+		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			throw new NotSupportedException();
 		}
 	}
 
@@ -292,6 +286,11 @@ namespace SchemaZen.model.ScriptBuilder
 			}
 			return sb.ToString();
 		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			throw new NotSupportedException();
+		}
 	}
 
 	public class MaybePart : ScriptPart
@@ -335,6 +334,11 @@ namespace SchemaZen.model.ScriptBuilder
 				return result.Value;
 			}
 		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			throw new NotSupportedException();
+		}
 	}
 
 	public class AnyOrderPart : ScriptPart
@@ -376,6 +380,11 @@ namespace SchemaZen.model.ScriptBuilder
 			foreach (var component in Contents)
 				sb.Append(component.GenerateScript(variables));
 			return sb.ToString();
+		}
+
+		public override int PeekNextOccurrence(string script)
+		{
+			throw new NotSupportedException();
 		}
 	}
 }
