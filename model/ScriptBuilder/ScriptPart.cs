@@ -172,7 +172,7 @@ namespace SchemaZen.model.ScriptBuilder
 			else
 			{
 				var value = script.Substring(0, nextPos + length);
-				if (length > 0 && nextPos > 0)
+				if (PotentialValues != null && PotentialValues.Any() && !PotentialValues.Any(v => v.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
 				{
 					throw new FormatException(string.Format("Variable '{0}', with value '{1}' in script does not match any potential values: {2}", Name, value, string.Join("|", PotentialValues)));
 				}
