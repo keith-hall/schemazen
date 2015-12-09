@@ -81,8 +81,9 @@ namespace SchemaZen.model.ScriptBuilder
 			var result = VariablesFromScript(components, script, (name, value) => SetVariableIfNotDifferent(variables, name, value));
 			if (result.Key != null)
 				throw new FormatException(string.Format("Script does not match component.{2}Script component: '{0}'{2}Remaining script: '{1}'", result.Key, result.Value, Environment.NewLine));
-			if (!string.IsNullOrEmpty(result.Value.Trim()))
-				throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, result.Value));
+			var trailing = WhitespacePart.ConsumeScript(result.Value, null);
+			if (trailing.Length > 0)
+				throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, trailing));
 			return variables;
 		}
 	}
@@ -176,13 +177,14 @@ namespace SchemaZen.model.ScriptBuilder
 			_PreferredCount = PreferredCount;
 		}
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public static string ConsumeScript(string script, ScriptPart next)
 		{
 			var match = wsConsume.Match(script); // consume all whitespace, it doesn't matter about preferred amount/type here - allows more compatibility between SchemaZen versions in case of formatting changes etc.
 			if (match.Success)
 			{
 				return script.Substring(match.Length);
-			} else
+			}
+			else
 			{
 				if (next == null) // if it is the last of the script tokens, it is optional trailing whitespace
 					return script;
@@ -198,6 +200,11 @@ namespace SchemaZen.model.ScriptBuilder
 				}
 				return null;
 			}
+		}
+
+		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		{
+			return ConsumeScript(script, next);
 		}
 
 		public override string GenerateScript(Dictionary<string, object> variables)
