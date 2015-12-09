@@ -81,6 +81,8 @@ namespace SchemaZen.model.ScriptBuilder
 			var result = VariablesFromScript(components, script, (name, value) => SetVariableIfNotDifferent(variables, name, value));
 			if (result.Key != null)
 				throw new FormatException(string.Format("Script does not match component.{2}Script component: '{0}'{2}Remaining script: '{1}'", result.Key, result.Value, Environment.NewLine));
+			if (!string.IsNullOrEmpty(result.Value.Trim()))
+				throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, result.Value));
 			return variables;
 		}
 	}
