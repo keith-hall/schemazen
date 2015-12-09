@@ -60,7 +60,12 @@ namespace SchemaZen.model.ScriptBuilder
 			{
 				if (!variables[name].GetType().Equals(value.GetType()))
 					throw new FormatException(string.Format("Variable '{0}' is a {1}, yet part of the script is expecting it to be a {2}.", name, variables[name].GetType().Name, value.GetType().Name));
-				if (!variables[name].Equals(value))
+				var equals = variables[name].Equals(value);
+				if (!equals && value is string)
+				{
+					equals = string.Equals((string)variables[name], (string)value, StringComparison.InvariantCultureIgnoreCase);
+				}
+				if (!equals)
 					throw new FormatException(string.Format("Variable '{0}' is '{1}', yet part of the script is expecting it to be '{2}'.", name, variables[name], value));
 			}
 			else
@@ -74,7 +79,7 @@ namespace SchemaZen.model.ScriptBuilder
 			var variables = new Dictionary<string, object>();
 			var result = VariablesFromScript(components, script, (name, value) => SetVariableIfNotDifferent(variables, name, value));
 			if (result.Key != null)
-				throw new FormatException(string.Format("Script does not match component. Script component: '{0}' Remaining script: '{1}'", result.Key, result.Value));
+				throw new FormatException(string.Format("Script does not match component.{2}Script component: '{0}'{2}Remaining script: '{1}'", result.Key, result.Value, Environment.NewLine));
 			return variables;
 		}
 	}
@@ -146,47 +151,58 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
 		{
+			var length = 0;
 			if (PotentialValues != null && PotentialValues.Any())
 			{
-				foreach (var value in PotentialValues)
+				foreach (var value in PotentialValues.OrderByDescending(s => s.Length)) // look for longest values first, in case some a potential value starts with the entirety of another potential value
 				{
-					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase)) // TODO: should it also peek at whether the next script part matches, so that "incomplete" values are not found e.g. possible value "test", script value "testing"... i.e. to assert that the position of the next part is the end of this match
+					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase))
 					{
-						setVariable(Name, script.Substring(0, value.Length));
-						return script.Substring(value.Length);
+						length = value.Length;
+						break;
 					}
 				}
-				// TODO: should it attempt to find the next script part instead of aborting? might be useful if we later need to be able to know we found a part that was invalid, and/or to skip over the rest of the related script parts, to properly report an error and process the rest of the script as well as possible...
-				return null;
-			} else
+			}
+			// attempt to find the next script part
+			var nextPos = FindNextPart(next, script.Substring(length));
+			if (nextPos == -1)
 			{
-				var index = FindNextPart(next, script);
-				if (index > -1)
+				throw new FormatException(string.Format("Unable to find script part {0} after variable '{1}'.", next, Name));
+			}
+			else
+			{
+				var value = script.Substring(0, nextPos + length);
+				if (length > 0 && nextPos > 0)
 				{
-					setVariable(Name, script.Substring(0, index));
-					return script.Substring(index);
+					throw new FormatException(string.Format("Variable '{0}', with value '{1}' in script does not match any potential values: {2}", Name, value, string.Join("|", PotentialValues)));
 				}
 				else
 				{
-					throw new NotImplementedException(string.Format("Unsupported script part after freely-valued variable {0}.", Name));
+					setVariable(Name, value);
+					return script.Substring(nextPos + length);
 				}
 			}
 		}
 
 		protected int FindNextPart(ScriptPart next, string script)
 		{
-			if (next is ConstPart)
+			// TODO: should we move this to the separate classes?
+			if (next == null) // variable value is until the end of the script
+			{
+				return script.Length;
+			}
+			else if (next is ConstPart) // variable value is until the first occurrence of the const part
 			{
 				return script.IndexOf(((ConstPart)next).Text, StringComparison.InvariantCultureIgnoreCase);
 			}
-			else if (next is WhitespacePart)
+			else if (next is WhitespacePart) // variable value is until the first occurrence of whitespace
 			{
 				var match = ws.Match(script);
 				return match.Index;
 			}
 			else
 			{
-				return -1;
+				throw new NotImplementedException(string.Format("Unsupported script part {0} after variable '{1}'.", next, Name));
 			}
 		}
 
@@ -318,6 +334,48 @@ namespace SchemaZen.model.ScriptBuilder
 					setVariable(kvp.Key, kvp.Value);
 				return result.Value;
 			}
+		}
+	}
+
+	public class AnyOrderPart : ScriptPart
+	{
+		public ScriptPart[] Contents;
+
+		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		{
+			// try each content to see if it is consumable... stop when none are.
+			var unconsumed = Contents.ToList();
+			
+			while (unconsumed.Count > 0)
+			{
+				var consumed = 0;
+				
+				foreach (var component in unconsumed.ToArray())
+				{
+					var remaining = component.ConsumeScript(setVariable, script, null);
+					if (remaining != script)
+					{
+						unconsumed.Remove(component);
+						consumed++;
+						script = remaining;
+					}
+				}
+				if (consumed == 0)
+					break;
+			}
+			if (!unconsumed.Any() || unconsumed.All(p => p is MaybePart))
+				return script;
+			else
+				return null;
+		}
+
+		public override string GenerateScript(Dictionary<string, object> variables)
+		{
+			// output the contents in the order they were defined
+			var sb = new StringBuilder();
+			foreach (var component in Contents)
+				sb.Append(component.GenerateScript(variables));
+			return sb.ToString();
 		}
 	}
 }
