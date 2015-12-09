@@ -94,6 +94,7 @@
     <Compile Include="ForeignKeyTester.cs" />
     <Compile Include="FunctionTester.cs" />
     <Compile Include="ProcTester.cs" />
+    <Compile Include="ScriptConsumerTester.cs" />
     <Compile Include="TableTester.cs" />
     <Compile Include="TestHelper.cs" />
   </ItemGroup>

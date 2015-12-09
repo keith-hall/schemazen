@@ -111,9 +111,9 @@ namespace SchemaZen.model {
 		{
 			var d = ScriptPart.VariablesFromScript(GetScriptComponents(), script);
 			var fk = new ForeignKey((string)d["Name"]);
-			fk.Table = new Table((string)d["Table.Owner"], (string)d["Table.Name"]);
+			fk.Table = new Table((string)d["Table.Owner"], (string)d["Table.Name"]); // TODO: rather than creating a new table, it should look it up from the database (meaning order in which scripts are parsed is important)
 			fk.Columns = (List<string>)d["Columns"];
-			fk.RefTable = new Table((string)d["RefTable.Owner"], (string)d["RefTable.Name"]);
+			fk.RefTable = new Table((string)d["RefTable.Owner"], (string)d["RefTable.Name"]); // TODO: same here
 			fk.RefColumns = (List<string>)d["RefColumns"];
 			fk.Check = ((string)d["Check"]).Equals("CHECK", StringComparison.InvariantCultureIgnoreCase);
 			if (d.ContainsKey("OnUpdate"))
