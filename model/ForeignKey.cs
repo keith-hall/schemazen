@@ -52,7 +52,8 @@ namespace SchemaZen.model {
 			foreach (var part in ConstPart.FromString("ALTER TABLE ["))
 				yield return part;
 			yield return new VariablePart(Name: "Table.Owner");
-			yield return new ConstPart(Text: "].[");
+			foreach (var part in ConstPart.FromString("].[")) // TODO: think of a neat way to allow a space either side of the dot when consuming without making it part of the formatting when generating the script
+				yield return part;
 			yield return new VariablePart(Name: "Table.Name");
 			foreach (var part in ConstPart.FromString("] WITH "))
 				yield return part;
@@ -66,7 +67,8 @@ namespace SchemaZen.model {
 			foreach (var part in ConstPart.FromString(") REFERENCES ["))
 				yield return part;
 			yield return new VariablePart(Name: "RefTable.Owner");
-			yield return new ConstPart(Text: "].[");
+			foreach (var part in ConstPart.FromString("].["))
+				yield return part;
 			yield return new VariablePart(Name: "RefTable.Name");
 			foreach (var part in ConstPart.FromString("] ("))
 				yield return part;
@@ -85,7 +87,7 @@ namespace SchemaZen.model {
 			(
 				Variable: "Check",
 				SkipIfRegexMatch: @"\ACHECK\Z",
-				Contents: ConstPart.FromString("   ALTER TABLE [").Concat(new ScriptPart[] { new VariablePart(Name: "Table.Owner"), new ConstPart(Text: "].["), new VariablePart(Name: "Table.Name"), new ConstPart(Text: "]"), new WhitespacePart(), new VariablePart(Name: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT [").Concat(new ScriptPart[] { new VariablePart(Name: "Name"), new ConstPart(Text: "]"), new WhitespacePart(PreferredChar: '\n') }))
+				Contents: ConstPart.FromString("   ALTER TABLE [").Concat(new ScriptPart[] { new VariablePart(Name: "Table.Owner") }).Concat(ConstPart.FromString("].[")).Concat(new ScriptPart[] { new VariablePart(Name: "Table.Name") }).Concat(ConstPart.FromString("] ")).Concat(new ScriptPart[] { new VariablePart(Name: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT [")).Concat(new ScriptPart[] { new VariablePart(Name: "Name"), new ConstPart(Text: "]"), new WhitespacePart(PreferredChar: '\n') })
 			);
 
 		}

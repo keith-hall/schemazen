@@ -59,5 +59,17 @@ namespace SchemaZen.test
 
 			var d = ScriptPart.VariablesFromScript(components.Concat(components), "[owner].[name][owner2].[name]");
 		}
+
+		[Test]
+		public void TestCommentsInWhitespace()
+		{
+			var components = new ScriptPart[] { new ConstPart(Text: "["), new VariablePart(Name: "Identifier"), new ConstPart(Text: "]") };
+			var d = ScriptPart.VariablesFromScript(components, "[name] --test"); // test trailing whitespace and comments
+			Assert.AreEqual(d["Identifier"], "name");
+
+			components = new ScriptPart[] { new ConstPart(Text: "["), new VariablePart(Name: "schema") }.Concat(ConstPart.FromString("] . [").Concat(new ScriptPart[] { new VariablePart(Name: "identifier") }).Concat(ConstPart.FromString("] "))).ToArray();
+			d = ScriptPart.VariablesFromScript(components, "[dbo] /*test*/ . [name]"); // test optional trailing whitespace and comments in whitespace
+			Assert.AreEqual(d["identifier"], "name");
+		}
 	}
 }

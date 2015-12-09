@@ -194,7 +194,7 @@ namespace SchemaZen.model.ScriptBuilder
 					// TODO: should this also work if the previous character was one of these?
 					// TODO: probably should expand the range of characters to include all operators etc.
 					var nextText = ((ConstPart)next).Text;
-					var optionalIfFollowedBy = "()[],";
+					var optionalIfFollowedBy = "()[],.";
 					if (optionalIfFollowedBy.Contains(nextText.Substring(0, 1)))
 						return script;
 				}
