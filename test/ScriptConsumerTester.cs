@@ -24,9 +24,14 @@ namespace SchemaZen.test
 
 			var script = fk.ScriptCreate();
 
-			var fk2 = ForeignKey.FromScript(script);
+			var db = new Database();
+			db.Tables.Add(fk.Table);
+			db.Tables.Add(fk.RefTable);
+
+			var fk2 = ForeignKey.FromScript(script, db);
 			var script2 = fk2.ScriptCreate();
 			Assert.AreEqual(script, script2);
+			Assert.AreEqual(db.FindForeignKey(fk2.Name), fk2);
 		}
 
 		[Test]

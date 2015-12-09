@@ -107,20 +107,27 @@ namespace SchemaZen.model {
 
 		}
 
-		public static ForeignKey FromScript(string script)
+		public static ForeignKey FromScript(string script, Database db)
 		{
 			var d = ScriptPart.VariablesFromScript(GetScriptComponents(), script);
+			if (db.FindForeignKey((string)d["Name"]) != null)
+				throw new InvalidOperationException(string.Format("Database model already contains the foriegn key named {0} that is defined in this script.", (string)d["Name"]));
 			var fk = new ForeignKey((string)d["Name"]);
-			fk.Table = new Table((string)d["Table.Owner"], (string)d["Table.Name"]); // TODO: rather than creating a new table, it should look it up from the database (meaning order in which scripts are parsed is important)
+			fk.Table = db.FindTable((string)d["Table.Name"], (string)d["Table.Owner"]);
 			fk.Columns = (List<string>)d["Columns"];
-			fk.RefTable = new Table((string)d["RefTable.Owner"], (string)d["RefTable.Name"]); // TODO: same here
+			fk.RefTable = db.FindTable((string)d["RefTable.Name"], (string)d["RefTable.Owner"]);
 			fk.RefColumns = (List<string>)d["RefColumns"];
 			fk.Check = ((string)d["Check"]).Equals("CHECK", StringComparison.InvariantCultureIgnoreCase);
 			if (d.ContainsKey("OnUpdate"))
 				fk.OnUpdate = (string)d["OnUpdate"];
 			if (d.ContainsKey("OnDelete"))
 				fk.OnDelete = (string)d["OnDelete"];
-			
+
+			if (fk.Table == null || fk.RefTable == null)
+				throw new InvalidOperationException("One or more of the tables referenced by this foreign key do not exist in the database model.");
+
+			db.ForeignKeys.Add(fk);
+
 			return fk;
 		}
 
