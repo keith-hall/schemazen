@@ -37,23 +37,32 @@ namespace SchemaZen.model.ScriptBuilder
 				script = parts[i].ConsumeScript(setVariable, remaining);
 				if (script == null)
 				{
-					if (i == 0 && parts[i] is WhitespacePart) // if this was the first part and it was whitespace, then it is optional, so try again with the next part
+					var skip = false;
+					// if this part that failed to match is a whitespace part
+					if (parts[i] is WhitespacePart)
+					{
+						if (i == 0) // if this was the first part, then it is optional, so try again with the next part
+						{
+							skip = true;
+						}
+						else
+						{
+							// if the next part is  a constant that starts with a character that means this whitespace is optional
+							// or the prev part was a constant that ended  with a character that means this whitespace is optional
+							if ((i < parts.Length - 1 && parts[i + 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i + 1]).Text.First())) ||
+								(i > 0 && parts[i - 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i - 1]).Text.Last()))
+							   )
+							{
+								skip = true;
+							}
+						}
+					}
+					if (skip)
 					{
 						script = remaining;
 						continue;
-					}
-					else
-					{
-						// if this part is a whitespace part and the next part is a constant that starts with a character that means this whitespace is optional
-						// or this part is a whitespace part and the prev part was a constant that ended with a character that means this whitespace is optional
-						if ((i < parts.Length - 1 && parts[i] is WhitespacePart && parts[i + 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i + 1]).Text[0])) ||
-							(i > 0                && parts[i] is WhitespacePart && parts[i - 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i - 1]).Text.Last())))
-						{
-							script = remaining;
-							continue;
-						} else
-							return new KeyValuePair<ScriptPart, string>(parts[i], remaining);
-					}
+					} else
+						return new KeyValuePair<ScriptPart, string>(parts[i], remaining);
 				}
 			}
 			return new KeyValuePair<ScriptPart, string>(null, script);
