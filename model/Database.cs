@@ -962,7 +962,7 @@ where name = @dbname
 
 		#region Script
 
-		public void ScriptToDir(string tableHint = null, Action<string, string, int, int> callback = null) {
+		public void ScriptToDir(string tableHint = null) {
 			if (Directory.Exists(Dir)) {
 				// delete the existing script files
 				var files = dirs.Select(dir => Path.Combine(Dir, dir))
@@ -976,21 +976,18 @@ where name = @dbname
 
 			WritePropsScript();
 			WriteSchemaScript();
-			WriteScriptDir("tables", Tables.Concat(TableTypes).ToArray(), callback);
-			WriteScriptDir("foreign_keys", ForeignKeys.ToArray(), callback);
+			WriteScriptDir("tables", Tables.ToArray());
+			WriteScriptDir("foreign_keys", ForeignKeys.ToArray());
 			foreach (var routineType in Routines.GroupBy(x => x.RoutineType)) {
 				var dir = routineType.Key.ToString().ToLower() + "s";
-				WriteScriptDir(dir, routineType.ToArray(), callback);
+				WriteScriptDir(dir, routineType.ToArray());
 			}
-			WriteScriptDir("views", ViewIndexes.ToArray(), callback);
-			WriteScriptDir("assemblies", Assemblies.ToArray(), callback);
-			WriteScriptDir("users", Users.ToArray(), callback);
-			WriteScriptDir("synonyms", Synonyms.ToArray(), callback);
+			WriteScriptDir("views", ViewIndexes.ToArray());
+			WriteScriptDir("assemblies", Assemblies.ToArray());
+			WriteScriptDir("users", Users.ToArray());
+			WriteScriptDir("synonyms", Synonyms.ToArray());
 
-			ExportData(tableHint, callback);
-
-			if (callback != null)
-				callback("complete", null, 0, 0);
+			ExportData(tableHint);
 		}
 
 		private void WritePropsScript() {
@@ -1011,17 +1008,11 @@ where name = @dbname
 			File.WriteAllText(string.Format("{0}/schemas.sql", Dir), text.ToString());
 		}
 
-		private void WriteScriptDir(string name, IEnumerable<IScriptable> objects, Action<string, string, int, int> callback = null)
-		{
+		private void WriteScriptDir(string name, IEnumerable<IScriptable> objects) {
 			if (!objects.Any()) return;
 			var dir = Path.Combine(Dir, name);
 			Directory.CreateDirectory(dir);
-			var index = 0;
-			var total = objects.Count();
 			foreach (var o in objects) {
-				if (callback != null)
-					callback("script", name, ++index, total);
-
 				var filePath = Path.Combine(dir, MakeFileName(o) + ".sql");
 				var script = o.ScriptCreate() + "\r\nGO\r\n";
 				File.AppendAllText(filePath, script);
@@ -1057,15 +1048,12 @@ where name = @dbname
 			return fileName;
 		}
 
-		public void ExportData(string tableHint = null, Action<string, string, int, int> callback = null) {
+		public void ExportData(string tableHint = null) {
 			var dataDir = Dir + "/data";
 			if (!Directory.Exists(dataDir)) {
 				Directory.CreateDirectory(dataDir);
 			}
-			var index = 0;
 			foreach (var t in DataTables) {
-				if (callback != null)
-					callback("data", t.Owner + "." + t.Name, ++index, DataTables.Count);
 				var sw = File.CreateText(dataDir + "/" + MakeFileName(t) + ".tsv");
 				t.ExportData(Connection, sw, tableHint);
 				sw.Flush();
