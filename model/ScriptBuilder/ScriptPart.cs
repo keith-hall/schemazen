@@ -22,24 +22,36 @@ namespace SchemaZen.model.ScriptBuilder
 
 		internal static KeyValuePair<ScriptPart, string> VariablesFromScript(IEnumerable<ScriptPart> components, string script, Action<string, object> setVariable)
 		{
-			ScriptPart prev = null;
-			foreach (var component in components)
+			var parts = components.ToArray();
+			for (var i = 0; i < parts.Length; i++)
 			{
-				if (prev is IdentifierPart && component is WhitespacePart)
-					continue;
+				// if the previous part was an identifier or a whitespace part and this is a whitespace part
+				if (i > 0 && (parts[i - 1] is IdentifierPart || parts[i - 1] is WhitespacePart) && parts[i] is WhitespacePart)
+					continue; // the whitespace has already been consumed
+				// if this part is a whitespace part and the next part is an identifier
+				if (i < parts.Length - 1 && parts[i] is WhitespacePart && parts[i + 1] is IdentifierPart)
+					continue; // the whitespace is optional, the identifier will consume it
+				
 				var remaining = script;
-				script = component.ConsumeScript(setVariable, remaining);
+				script = parts[i].ConsumeScript(setVariable, remaining);
 				if (script == null)
 				{
-					if (prev == null && component is WhitespacePart)
+					if (i == 0 && parts[i] is WhitespacePart) // if this was the first part and it was whitespace, then it is optional, so try again with the next part
 					{
 						script = remaining;
 						continue;
 					}
 					else
-						return new KeyValuePair<ScriptPart, string>(component, remaining);
+					{
+						// if this part is a whitespace part and the next part is a constant that starts with a character that means this whitespace is optional
+						if (i < parts.Length - 1 && parts[i] is WhitespacePart && parts[i + 1] is ConstPart && ",./()-+".Contains(((ConstPart)parts[i + 1]).Text.Substring(1)))
+						{
+							script = remaining;
+							continue;
+						} else
+							return new KeyValuePair<ScriptPart, string>(parts[i], remaining);
+					}
 				}
-				prev = component;
 			}
 			return new KeyValuePair<ScriptPart, string>(null, script);
 		}
