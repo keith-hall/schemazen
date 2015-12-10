@@ -88,8 +88,8 @@ namespace SchemaZen.model {
 			return Tables.SelectMany(t => t.Constraints).FirstOrDefault(c => c.Name == name);
 		}
 
-		public ForeignKey FindForeignKey(string name) {
-			return ForeignKeys.FirstOrDefault(fk => fk.Name == name);
+		public ForeignKey FindForeignKey(string name, string owner) {
+			return ForeignKeys.FirstOrDefault(fk => fk.Name == name && fk.Table.Owner == owner);
 		}
 
 		public Routine FindRoutine(string name, string schema) {
@@ -286,15 +286,17 @@ namespace SchemaZen.model {
 						m.definition,
 						m.uses_ansi_nulls,
 						m.uses_quoted_identifier,
-						s2.name as tableSchema,
-						t.name as tableName,
+						isnull(s2.name, s3.name) as tableSchema,
+						isnull(t.name, v.name) as tableName,
 						tr.is_disabled as trigger_disabled
 					from sys.sql_modules m
 						inner join sys.objects o on m.object_id = o.object_id
 						inner join sys.schemas s on s.schema_id = o.schema_id
 						left join sys.triggers tr on m.object_id = tr.object_id
 						left join sys.tables t on tr.parent_id = t.object_id
+						left join sys.views v on tr.parent_id = v.object_id
 						left join sys.schemas s2 on s2.schema_id = t.schema_id
+						left join sys.schemas s3 on s3.schema_id = v.schema_id
 					where objectproperty(o.object_id, 'IsMSShipped') = 0
 					";
 			using (var dr = cm.ExecuteReader()) {
@@ -349,6 +351,7 @@ namespace SchemaZen.model {
 			cm.CommandText = @"
 					select 
 						CONSTRAINT_NAME, 
+						OBJECT_SCHEMA_NAME(fk.parent_object_id) as TABLE_SCHEMA,
 						UPDATE_RULE, 
 						DELETE_RULE,
 						fk.is_disabled
@@ -356,7 +359,7 @@ namespace SchemaZen.model {
 						inner join sys.foreign_keys fk on rc.CONSTRAINT_NAME = fk.name";
 			using (var dr = cm.ExecuteReader()) {
 				while (dr.Read()) {
-					var fk = FindForeignKey((string) dr["CONSTRAINT_NAME"]);
+					var fk = FindForeignKey((string) dr["CONSTRAINT_NAME"], (string)dr["TABLE_SCHEMA"]);
 					fk.OnUpdate = (string) dr["UPDATE_RULE"];
 					fk.OnDelete = (string) dr["DELETE_RULE"];
 					fk.Check = !(bool) dr["is_disabled"];
@@ -367,6 +370,7 @@ namespace SchemaZen.model {
 			cm.CommandText = @"
 select
 	fk.name as CONSTRAINT_NAME,
+	OBJECT_SCHEMA_NAME(fk.parent_object_id) as TABLE_SCHEMA,
 	c1.name as COLUMN_NAME,
 	OBJECT_SCHEMA_NAME(fk.referenced_object_id) as REF_TABLE_SCHEMA,
 	OBJECT_NAME(fk.referenced_object_id) as REF_TABLE_NAME,
@@ -384,7 +388,7 @@ order by fk.name, fkc.constraint_column_id
 ";
 			using (var dr = cm.ExecuteReader()) {
 				while (dr.Read()) {
-					var fk = FindForeignKey((string) dr["CONSTRAINT_NAME"]);
+					var fk = FindForeignKey((string) dr["CONSTRAINT_NAME"], (string)dr["TABLE_SCHEMA"]);
 					if (fk == null) {
 						continue;
 					}
@@ -417,6 +421,9 @@ order by fk.name, fkc.constraint_column_id
 						union
 						select object_id, name, schema_id, 'V' as baseType
 						from   sys.views
+						union
+						select type_table_object_id, name, schema_id, 'TVT' as baseType
+						from   sys.table_types
 						) t
 						inner join sys.indexes i on i.object_id = t.object_id
 						inner join sys.index_columns ic on ic.object_id = t.object_id
@@ -430,7 +437,7 @@ order by fk.name, fkc.constraint_column_id
 				while (dr.Read()) {
 					var t = (string) dr["baseType"] == "V"
 						? new Table((string) dr["schemaName"], (string) dr["tableName"])
-						: FindTable((string) dr["tableName"], (string) dr["schemaName"]);
+						: FindTable((string) dr["tableName"], (string) dr["schemaName"], ((string) dr["baseType"]) == "TVT");
 					var c = t.FindConstraint((string) dr["indexName"]);
 					if (c == null) {
 						c = new Constraint((string) dr["indexName"], "", "");
@@ -563,7 +570,7 @@ order by fk.name, fkc.constraint_column_id
 					t.name as DATA_TYPE,
 					c.column_id as ORDINAL_POSITION,
 					CASE WHEN c.is_nullable = 1 THEN 'YES' ELSE 'NO' END as IS_NULLABLE,
-					CAST(c.max_length as int) as CHARACTER_MAXIMUM_LENGTH,
+					CASE WHEN t.name = 'nvarchar' THEN CAST(c.max_length as int)/2 ELSE CAST(c.max_length as int) END as CHARACTER_MAXIMUM_LENGTH,
 					c.precision as NUMERIC_PRECISION,
 					c.scale as NUMERIC_SCALE,
 					CASE WHEN c.is_rowguidcol = 1 THEN 'YES' ELSE 'NO' END as IS_ROW_GUID_COL
@@ -809,7 +816,7 @@ where name = @dbname
 
 			//get added and compare mutual foreign keys
 			foreach (var fk in ForeignKeys) {
-				var fk2 = db.FindForeignKey(fk.Name);
+				var fk2 = db.FindForeignKey(fk.Name, fk.Table.Owner);
 				if (fk2 == null) {
 					diff.ForeignKeysAdded.Add(fk);
 				} else {
@@ -819,7 +826,7 @@ where name = @dbname
 				}
 			}
 			//get deleted foreign keys
-			foreach (var fk in db.ForeignKeys.Where(fk => FindForeignKey(fk.Name) == null)) {
+			foreach (var fk in db.ForeignKeys.Where(fk => FindForeignKey(fk.Name, fk.Table.Owner) == null)) {
 				diff.ForeignKeysDeleted.Add(fk);
 			}
 
@@ -977,6 +984,7 @@ where name = @dbname
 			WritePropsScript();
 			WriteSchemaScript();
 			WriteScriptDir("tables", Tables.ToArray());
+			WriteScriptDir("table_types", TableTypes.ToArray());
 			WriteScriptDir("foreign_keys", ForeignKeys.ToArray());
 			foreach (var routineType in Routines.GroupBy(x => x.RoutineType)) {
 				var dir = routineType.Key.ToString().ToLower() + "s";

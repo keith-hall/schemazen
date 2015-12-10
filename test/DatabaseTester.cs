@@ -181,6 +181,172 @@ namespace SchemaZen.test {
 		}
 
 		[Test]
+		public void TestScriptTableType() {
+			var setupSQL1 = @"
+CREATE TYPE [dbo].[MyTableType] AS TABLE(
+	[ID] [nvarchar](250) NULL
+)
+
+";
+
+			var db = new Database("TestScriptTableType");
+
+			db.Connection = ConfigHelper.TestDB.Replace("database=TESTDB", "database=" + db.Name);
+
+			db.ExecCreate(true);
+
+			DBHelper.ExecSql(db.Connection, setupSQL1);
+
+			db.Dir = db.Name;
+			db.Load();
+
+			db.ScriptToDir();
+
+			Assert.AreEqual(1, db.TableTypes.Count());
+			Assert.AreEqual(250, db.TableTypes[0].Columns.Items[0].Length);
+			Assert.AreEqual("MyTableType", db.TableTypes[0].Name);
+			Assert.IsTrue(File.Exists(db.Name + "\\table_types\\TYPE_MyTableType.sql"));
+
+		}
+
+
+		[Test]
+		public void TestScriptTableTypePrimaryKey() {
+			var setupSQL1 = @"
+CREATE TYPE [dbo].[MyTableType] AS TABLE(
+	[ID] [int] NOT NULL,
+	[Value] [varchar](50) NOT NULL,
+	PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)
+)
+
+";
+
+			var db = new Database("TestScriptTableTypePrimaryKey");
+
+			db.Connection = ConfigHelper.TestDB.Replace("database=TESTDB", "database=" + db.Name);
+
+			db.ExecCreate(true);
+
+			DBHelper.ExecSql(db.Connection, setupSQL1);
+
+			db.Dir = db.Name;
+			db.Load();
+
+			db.ScriptToDir();
+
+			Assert.AreEqual(1, db.TableTypes.Count());
+			Assert.AreEqual(1, db.TableTypes[0].PrimaryKey.Columns.Count);
+			Assert.AreEqual("ID", db.TableTypes[0].PrimaryKey.Columns[0]);
+			Assert.AreEqual(50, db.TableTypes[0].Columns.Items[1].Length);
+			Assert.AreEqual("MyTableType", db.TableTypes[0].Name);
+			Assert.IsTrue(File.Exists(db.Name + "\\table_types\\TYPE_MyTableType.sql"));
+
+			Assert.IsTrue(File.ReadAllText(db.Name + "\\table_types\\TYPE_MyTableType.sql").Contains("PRIMARY KEY"));
+
+		}
+
+		[Test]
+		public void TestScriptFKSameName() {
+			var setupSQL = @"
+CREATE SCHEMA [s2] AUTHORIZATION [dbo]
+
+CREATE TABLE [dbo].[t1a]
+(
+    a INT NOT NULL, 
+    CONSTRAINT [PK_1a] PRIMARY KEY (a)
+)
+
+CREATE TABLE [dbo].[t1b]
+(
+    a INT NOT NULL,
+    CONSTRAINT [FKName] FOREIGN KEY ([a]) REFERENCES [dbo].[t1a] ([a])
+)
+
+CREATE TABLE [s2].[t2a]
+(
+    a INT NOT NULL, 
+    CONSTRAINT [PK_2a] PRIMARY KEY (a)
+)
+
+CREATE TABLE [s2].[t2b]
+(
+    a INT NOT NULL,
+    CONSTRAINT [FKName] FOREIGN KEY ([a]) REFERENCES [s2].[t2a] ([a])
+)
+
+";
+
+			var db = new Database("TestScriptFKSameName");
+
+			db.Connection = ConfigHelper.TestDB.Replace("database=TESTDB", "database=" + db.Name);
+
+			db.ExecCreate(true);
+
+			DBHelper.ExecSql(db.Connection, setupSQL);
+
+			db.Dir = db.Name;
+			db.Load();
+
+			// Required in order to expose the exception
+			db.ScriptToDir();
+
+			Assert.AreEqual(2, db.ForeignKeys.Count());
+			Assert.AreEqual(db.ForeignKeys[0].Name, db.ForeignKeys[1].Name);
+			Assert.AreNotEqual(db.ForeignKeys[0].Table.Owner, db.ForeignKeys[1].Table.Owner);
+
+		}
+
+		public void TestScriptViewInsteadOfTrigger() {
+			var setupSQL1 = @"
+CREATE TABLE [dbo].[t1]
+(
+    a INT NOT NULL, 
+    CONSTRAINT [PK] PRIMARY KEY (a)
+)
+";
+			var setupSQL2 = @"
+
+CREATE VIEW [dbo].[v1] AS
+
+    SELECT * FROM t1
+
+";
+			var setupSQL3 = @"
+
+CREATE TRIGGER [dbo].[TR_v1] ON [dbo].[v1] INSTEAD OF DELETE AS
+
+    DELETE FROM [dbo].[t1] FROM [dbo].[t1] INNER JOIN DELETED ON DELETED.a = [dbo].[t1].a
+
+";
+
+			var db = new Database("TestScriptViewInsteadOfTrigger");
+
+			db.Connection = ConfigHelper.TestDB.Replace("database=TESTDB", "database=" + db.Name);
+
+			db.ExecCreate(true);
+
+			DBHelper.ExecSql(db.Connection, setupSQL1);
+			DBHelper.ExecSql(db.Connection, setupSQL2);
+			DBHelper.ExecSql(db.Connection, setupSQL3);
+
+			db.Dir = db.Name;
+			db.Load();
+
+			// Required in order to expose the exception
+			db.ScriptToDir();
+
+			var triggers = db.Routines.Where(x => x.RoutineType == Routine.RoutineKind.Trigger).ToList();
+
+			Assert.AreEqual(1, triggers.Count());
+			Assert.AreEqual("TR_v1", triggers[0].Name);
+			Assert.IsTrue(File.Exists(db.Name + "\\triggers\\TR_v1.sql"));
+
+		}
+
+		[Test]
 		public void TestScriptDeletedProc() {
 			var source = new Database();
 			source.Routines.Add(new Routine("dbo", "test", null));
