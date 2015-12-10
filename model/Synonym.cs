@@ -1,5 +1,5 @@
 ﻿namespace SchemaZen.model {
-	public class Synonym : INameable, IHasOwner {
+	public class Synonym : INameable, IHasOwner, IScriptable {
 		public string Name { get; set; }
 		public string Owner { get; set; }
 		public string BaseObjectName;

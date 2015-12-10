@@ -1,5 +1,5 @@
 ﻿namespace SchemaZen.model {
-	public interface INameable : IScriptable {
+	public interface INameable {
 		string Name { get; set; }
 	}
 

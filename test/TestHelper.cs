@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Data.SqlClient;
 using NUnit.Framework;
-using SchemaZen.helpers;
+using SchemaZen.model;
 
 namespace SchemaZen.test {
 	[SetUpFixture]

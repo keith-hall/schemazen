@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace SchemaZen.model {
-	public class Routine : INameable, IHasOwner {
+	public class Routine : INameable, IHasOwner, IScriptable {
 		public enum RoutineKind {
 			Procedure,
 			Function,
