@@ -20,7 +20,7 @@ namespace SchemaZen.console {
 				"tableHint=",
 				"Table hint to use when exporting data.",
 				o => TableHint = o);
-			HasOption("v|verbose=",
+			HasOption("v|Verbose=",
 				"Verbose output of actions.",
 				o => Verbose = o != null);
 		}
