@@ -52,10 +52,20 @@ namespace SchemaZen.test
 		}
 
 		[Test]
-		[ExpectedException(typeof(FormatException))]
-		public void TestVariableInconsistentValue()
+		public void TestIdentifierConsistentValue()
 		{
-			var components = new ScriptPart[] { new ConstPart(Text: "["), new VariablePart(Name: "Table.Owner"), new ConstPart(Text: "].["), new VariablePart(Name: "Table.Name"), new ConstPart(Text: "]") };
+			var components = new ScriptPart[] { new IdentifierPart(VariableName: "Table.Owner"), new ConstPart(Text: "."), new IdentifierPart(VariableName: "Table.Name") };
+
+			var d = ScriptPart.VariablesFromScript(components.Concat(components), "[dbo].[name] dbo.[name]");
+			Assert.AreEqual(d["Table.Owner"], "dbo");
+			Assert.AreEqual(d["Table.Name"], "name");
+		}
+
+		[Test]
+		[ExpectedException(typeof(FormatException))]
+		public void TestIdentifierInconsistentValue()
+		{
+			var components = new ScriptPart[] { new IdentifierPart(VariableName: "Table.Owner"), new ConstPart(Text: "."), new IdentifierPart(VariableName: "Table.Name") };
 
 			var d = ScriptPart.VariablesFromScript(components.Concat(components), "[owner].[name][owner2].[name]");
 		}
@@ -63,13 +73,29 @@ namespace SchemaZen.test
 		[Test]
 		public void TestCommentsInWhitespace()
 		{
-			var components = new ScriptPart[] { new ConstPart(Text: "["), new VariablePart(Name: "Identifier"), new ConstPart(Text: "]") };
+			var components = new ScriptPart[] { new IdentifierPart(VariableName: "Identifier") };
 			var d = ScriptPart.VariablesFromScript(components, "[name] --test"); // test trailing whitespace and comments
 			Assert.AreEqual(d["Identifier"], "name");
 
-			components = new ScriptPart[] { new ConstPart(Text: "["), new VariablePart(Name: "schema") }.Concat(ConstPart.FromString("] . [").Concat(new ScriptPart[] { new VariablePart(Name: "identifier") }).Concat(ConstPart.FromString("] "))).ToArray();
-			d = ScriptPart.VariablesFromScript(components, "[dbo] /*test*/ . [name]"); // test optional trailing whitespace and comments in whitespace
+			components = new ScriptPart[] { new IdentifierPart(VariableName: "schema"), new ConstPart("."), new IdentifierPart(VariableName: "identifier") };
+			d = ScriptPart.VariablesFromScript(components, "[dbo] /*test*/ . [name]"); // test optional whitespace and comments in whitespace
 			Assert.AreEqual(d["identifier"], "name");
+		}
+
+		[Test]
+		[ExpectedException(typeof(FormatException))]
+		public void TestTrailingText()
+		{
+			var components = new ScriptPart[] { new IdentifierPart(VariableName: "Identifier") };
+			var d = ScriptPart.VariablesFromScript(components, "[name] select 1");
+		}
+
+		[Test]
+		public void TestAnyOrder()
+		{
+			var components = new AnyOrderPart(Contents: new ScriptPart[] { new ConstPart("1"), new WhitespacePart(), new ConstPart("SELECT") });
+			var d = ScriptPart.VariablesFromScript(new[] { components }, "select 1");
+			Assert.AreEqual(d.Keys.Count, 0);
 		}
 	}
 }

@@ -49,45 +49,43 @@ namespace SchemaZen.model {
 
 		public static IEnumerable<ScriptPart> GetScriptComponents()
 		{
-			foreach (var part in ConstPart.FromString("ALTER TABLE ["))
+			foreach (var part in ConstPart.FromString("ALTER TABLE "))
 				yield return part;
-			yield return new VariablePart(Name: "Table.Owner");
-			foreach (var part in ConstPart.FromString("].[")) // TODO: think of a neat way to allow a space either side of the dot when consuming without making it part of the formatting when generating the script
+			yield return new IdentifierPart(VariableName: "Table.Owner");
+			yield return new ConstPart(Text: ".");
+			yield return new IdentifierPart(VariableName: "Table.Name");
+			foreach (var part in ConstPart.FromString(" WITH "))
 				yield return part;
-			yield return new VariablePart(Name: "Table.Name");
-			foreach (var part in ConstPart.FromString("] WITH "))
+			yield return new OneOfPredefinedValuesPart(VariableName: "Check", PotentialValues: new[] { "CHECK", "NOCHECK" });
+			foreach (var part in ConstPart.FromString(" ADD CONSTRAINT "))
 				yield return part;
-			yield return new VariablePart(Name: "Check", PotentialValues: new[] { "CHECK", "NOCHECK" });
-			foreach (var part in ConstPart.FromString(" ADD CONSTRAINT ["))
+			yield return new IdentifierPart(VariableName: "Name");
+			foreach (var part in ConstPart.FromString(Environment.NewLine + "   FOREIGN KEY ("))
 				yield return part;
-			yield return new VariablePart(Name: "Name");
-			foreach (var part in ConstPart.FromString("]" + Environment.NewLine + "   FOREIGN KEY ("))
+			yield return new CommaSeparatedIdentifiersPart(VariableName: "Columns");
+			foreach (var part in ConstPart.FromString(") REFERENCES "))
 				yield return part;
-			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "Columns"), Prefix: ConstPart.FromString("["), Suffix: ConstPart.FromString("]"), Separator: ConstPart.FromString(", "));
-			foreach (var part in ConstPart.FromString(") REFERENCES ["))
+			yield return new IdentifierPart(VariableName: "RefTable.Owner");
+			yield return new ConstPart(Text: ".");
+			yield return new IdentifierPart(VariableName: "RefTable.Name");
+			foreach (var part in ConstPart.FromString(" ("))
 				yield return part;
-			yield return new VariablePart(Name: "RefTable.Owner");
-			foreach (var part in ConstPart.FromString("].["))
-				yield return part;
-			yield return new VariablePart(Name: "RefTable.Name");
-			foreach (var part in ConstPart.FromString("] ("))
-				yield return part;
-			yield return new MultipleOccurancesPart(Variable: new VariablePart(Name: "RefColumns"), Prefix: ConstPart.FromString("["), Suffix: ConstPart.FromString("]"), Separator: ConstPart.FromString(", "));
+			yield return new CommaSeparatedIdentifiersPart(VariableName: "RefColumns");
 			foreach (var part in ConstPart.FromString(")" + Environment.NewLine))
 				yield return part;
 			
 			yield return new AnyOrderPart
 			(
 				Contents: new[] {
-					new MaybePart(Variable: "OnUpdate", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON UPDATE ").Concat(new ScriptPart[] { new VariablePart(Name: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') })),
-					new MaybePart(Variable: "OnDelete", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON DELETE ").Concat(new ScriptPart[] { new VariablePart(Name: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') }))
+					new MaybePart(Variable: "OnUpdate", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON UPDATE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') })),
+					new MaybePart(Variable: "OnDelete", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON DELETE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') }))
 				}
 			);
 			yield return new MaybePart
 			(
 				Variable: "Check",
 				SkipIfRegexMatch: @"\ACHECK\Z",
-				Contents: ConstPart.FromString("   ALTER TABLE [").Concat(new ScriptPart[] { new VariablePart(Name: "Table.Owner") }).Concat(ConstPart.FromString("].[")).Concat(new ScriptPart[] { new VariablePart(Name: "Table.Name") }).Concat(ConstPart.FromString("] ")).Concat(new ScriptPart[] { new VariablePart(Name: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT [")).Concat(new ScriptPart[] { new VariablePart(Name: "Name"), new ConstPart(Text: "]"), new WhitespacePart(PreferredChar: '\n') })
+				Contents: ConstPart.FromString("   ALTER TABLE ").Concat(new ScriptPart[] { new IdentifierPart(VariableName: "Table.Owner"), new ConstPart(Text: "."), new IdentifierPart(VariableName: "Table.Name"), new WhitespacePart() }).Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT ")).Concat(new ScriptPart[] { new IdentifierPart(VariableName: "Name"), new WhitespacePart(PreferredChar: '\n') })
 			);
 
 		}

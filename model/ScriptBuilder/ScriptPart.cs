@@ -8,9 +8,8 @@ namespace SchemaZen.model.ScriptBuilder
 {
 	public abstract class ScriptPart {
 		public abstract string GenerateScript(Dictionary<string, object> variables);
-		public abstract string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next);
-		public abstract int PeekNextOccurrence(string script);
-
+		public abstract string ConsumeScript(Action<string, object> setVariable, string script);
+		
 		public static string ScriptFromComponents(IEnumerable<ScriptPart> components, Dictionary<string, object> variables)
 		{
 			var sb = new StringBuilder();
@@ -23,36 +22,26 @@ namespace SchemaZen.model.ScriptBuilder
 
 		internal static KeyValuePair<ScriptPart, string> VariablesFromScript(IEnumerable<ScriptPart> components, string script, Action<string, object> setVariable)
 		{
-			ScriptPart current = null;
-			var remaining = script;
-			var first = true;
-			Action<ScriptPart> process = next =>
-			{
-				if (current != null && !(current is WhitespacePart && next is WhitespacePart)) // skip multiple consecutive whitespace parts
-				{
-					script = current.ConsumeScript(setVariable, remaining, next);
-					if (first && current is WhitespacePart && script == null) // if the first script part is whitespace, then it is optional
-						script = remaining;
-				}
-				if (script != null)
-				{
-					if (current != null)
-					{
-						remaining = script;
-						first = false;
-					}
-					current = next;
-				}
-			};
-			
+			ScriptPart prev = null;
 			foreach (var component in components)
 			{
-				process(component);
+				if (prev is IdentifierPart && component is WhitespacePart)
+					continue;
+				var remaining = script;
+				script = component.ConsumeScript(setVariable, remaining);
 				if (script == null)
-					return new KeyValuePair<ScriptPart, string>(current, remaining);
+				{
+					if (prev == null && component is WhitespacePart)
+					{
+						script = remaining;
+						continue;
+					}
+					else
+						return new KeyValuePair<ScriptPart, string>(component, remaining);
+				}
+				prev = component;
 			}
-			process(null);
-			return new KeyValuePair<ScriptPart, string>(current, remaining);
+			return new KeyValuePair<ScriptPart, string>(null, script);
 		}
 
 		internal static void SetVariableIfNotDifferent(Dictionary<string, object> variables, string name, object value)
@@ -81,9 +70,12 @@ namespace SchemaZen.model.ScriptBuilder
 			var result = VariablesFromScript(components, script, (name, value) => SetVariableIfNotDifferent(variables, name, value));
 			if (result.Key != null)
 				throw new FormatException(string.Format("Script does not match component.{2}Script component: '{0}'{2}Remaining script: '{1}'", result.Key, result.Value, Environment.NewLine));
-			var trailing = WhitespacePart.ConsumeScript(result.Value, null);
-			if (trailing.Length > 0)
-				throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, trailing));
+			if (result.Value.Length > 0)
+			{
+				var trailing = WhitespacePart.ConsumeScript(result.Value);
+				if (trailing == null || trailing.Length > 0)
+					throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, trailing ?? result.Value));
+			}
 			return variables;
 		}
 	}
@@ -101,7 +93,7 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public string Text { get { return _text; } }
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
 			if (script.StartsWith(_text, StringComparison.InvariantCultureIgnoreCase))
 			{
@@ -115,11 +107,6 @@ namespace SchemaZen.model.ScriptBuilder
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
 			return _text;
-		}
-
-		public override int PeekNextOccurrence(string script)
-		{
-			return script.IndexOf(_text, StringComparison.InvariantCultureIgnoreCase);
 		}
 
 		private static Regex ws = new Regex(@"\s+");
@@ -177,7 +164,7 @@ namespace SchemaZen.model.ScriptBuilder
 			_PreferredCount = PreferredCount;
 		}
 
-		public static string ConsumeScript(string script, ScriptPart next)
+		public static string ConsumeScript(string script)
 		{
 			var match = wsConsume.Match(script); // consume all whitespace, it doesn't matter about preferred amount/type here - allows more compatibility between SchemaZen versions in case of formatting changes etc.
 			if (match.Success)
@@ -186,134 +173,123 @@ namespace SchemaZen.model.ScriptBuilder
 			}
 			else
 			{
-				if (next == null) // if it is the last of the script tokens, it is optional trailing whitespace
-					return script;
-				if (next is ConstPart)
-				{
-					// make whitespace optional if next character is a bracket or a comma
-					// TODO: should this also work if the previous character was one of these?
-					// TODO: probably should expand the range of characters to include all operators etc.
-					var nextText = ((ConstPart)next).Text;
-					var optionalIfFollowedBy = "()[],.";
-					if (optionalIfFollowedBy.Contains(nextText.Substring(0, 1)))
-						return script;
-				}
 				return null;
 			}
 		}
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
-			return ConsumeScript(script, next);
+			return ConsumeScript(script);
 		}
 
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
 			return new string(Enumerable.Repeat(_PreferredChar, _PreferredCount).ToArray());
 		}
-
-		public override int PeekNextOccurrence(string script)
-		{
-			var match = wsPeek.Match(script);
-			return match.Index;
-		}
 	}
 
-	public class VariablePart : ScriptPart
+	public class IdentifierPart : ScriptPart
 	{
-		private string _Name;
-		internal string[] _PotentialValues;
-
-		public VariablePart(string Name, string[] PotentialValues = null)
+		private string VarName;
+		private static Regex identifier = new Regex(@"\A" + Database.SqlWhitespaceOrCommentRegex + "*(" + Database.SqlEnclosedIdentifierRegex + "|" + Database.SqlRegularIdentifierRegex + "|" + Database.SqlQuotedIdentifierRegex + ")" + Database.SqlWhitespaceOrCommentRegex + "*");
+		
+		public IdentifierPart(string VariableName)
 		{
-			if (string.IsNullOrEmpty(Name))
-				throw new ArgumentNullException(nameof(Name));
-			_Name = Name;
-			_PotentialValues = PotentialValues;
+			if (string.IsNullOrEmpty(VariableName))
+				throw new ArgumentNullException(nameof(VariableName));
+			VarName = VariableName;
 		}
 
-		public string Name { get { return _Name; } }
+		public string VariableName { get { return VarName; } }
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
-			var length = 0;
-			if (_PotentialValues != null && _PotentialValues.Any())
+			var match = identifier.Match(script);
+			if (!match.Success)
 			{
-				foreach (var value in _PotentialValues.OrderByDescending(s => s.Length)) // look for longest values first, in case a potential value starts with the entirety of another potential value
-				{
-					if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase))
-					{
-						length = value.Length;
-						break;
-					}
-				}
+				return null;
 			}
-			// attempt to find the next script part
-			var nextPos = next == null ? script.Length : next.PeekNextOccurrence(script.Substring(length));
-			if (nextPos == -1)
-			{
-				throw new FormatException(string.Format("Unable to find script part {0} after variable '{1}'.", next, _Name));
-			}
-			else
-			{
-				var value = script.Substring(0, nextPos + length);
-				if (_PotentialValues != null && _PotentialValues.Any() && !_PotentialValues.Any(v => v.Equals(value, StringComparison.InvariantCultureIgnoreCase)))
-				{
-					throw new FormatException(string.Format("Variable '{0}', with value '{1}' in script does not match any potential values: {2}", _Name, value, string.Join("|", _PotentialValues)));
-				}
-				else
-				{
-					setVariable(_Name, value);
-					return script.Substring(nextPos + length);
-				}
-			}
+			var identifierName = match.Groups[1].Value;
+			if (identifierName.StartsWith("[") || identifierName.StartsWith("\""))
+				identifierName = identifierName.Substring(1, identifierName.Length - 2);
+			setVariable(VariableName, identifierName);
+			return script.Substring(match.Length);
+		}
+
+		protected string GenerateScript(string identifierName)
+		{
+			return "[" + identifierName + "]";
 		}
 
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
-			if (!variables.ContainsKey(_Name))
-				throw new ArgumentOutOfRangeException(string.Format("Variable '{0}' does not exist.", _Name));
-			var value = variables[_Name];
+			if (!variables.ContainsKey(VariableName))
+				throw new ArgumentOutOfRangeException(string.Format("Variable '{0}' does not exist.", VariableName));
+			var value = variables[VariableName];
 			if (!(value is string))
-				throw new FormatException(string.Format("Variable '{0}' is not a string.", _Name));
-			if (_PotentialValues != null && _PotentialValues.Any() && !_PotentialValues.Contains((string)value, StringComparer.InvariantCultureIgnoreCase))
-				throw new ArgumentException(string.Format("Variable '{0}' does not match any of the expected values. Found value: '{1}' Allowed values: '{2}'", _Name, value, string.Join("|", _PotentialValues)));
-			
-			return (string)value;
-		}
+				throw new FormatException(string.Format("Variable '{0}' is not a string.", VariableName));
 
-		public override int PeekNextOccurrence(string script)
-		{
-			throw new NotSupportedException();
+			return GenerateScript((string)value);
 		}
 	}
 
-	public class MultipleOccurancesPart : ScriptPart
+	public class OneOfPredefinedValuesPart : ScriptPart
 	{
-		private ScriptPart[] _Prefix;
-		private VariablePart _Variable;
-		private ScriptPart[] _Suffix;
-		private ScriptPart[] _Separator;
-
-		public MultipleOccurancesPart(VariablePart Variable, IEnumerable<ScriptPart> Separator, IEnumerable<ScriptPart> Prefix = null, IEnumerable<ScriptPart> Suffix = null)
+		private string _VariableName;
+		internal string[] _PotentialValues;
+		
+		public OneOfPredefinedValuesPart(string VariableName, IEnumerable<string> PotentialValues)
 		{
-			if (Variable == null)
-				throw new ArgumentNullException(nameof(Variable));
-			if (Separator == null)
-				throw new ArgumentNullException(nameof(Separator));
-			_Prefix = (Prefix ?? Enumerable.Empty<ScriptPart>()).ToArray();
-			_Variable = Variable;
-			_Suffix = (Suffix ?? Enumerable.Empty<ScriptPart>()).ToArray();
-			_Separator = Separator.ToArray();
-			if (!_Separator.Any())
-				throw new ArgumentNullException(nameof(Separator));
+			if (string.IsNullOrEmpty(VariableName))
+				throw new ArgumentNullException(nameof(VariableName));
+			_VariableName = VariableName;
+			if (PotentialValues == null)
+				throw new ArgumentNullException(nameof(PotentialValues));
+			_PotentialValues = PotentialValues.ToArray();
+			if (!_PotentialValues.Any())
+				throw new ArgumentNullException(nameof(PotentialValues));
 		}
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
-		{
-			if (_Variable._PotentialValues != null && _Variable._PotentialValues.Any())
-				throw new NotSupportedException(string.Format("Variable {0} is expected to have multiple values, so it cannot have any potential values defined.", _Variable.Name));
+		public string VariableName { get { return _VariableName; } }
 
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
+		{
+			foreach (var value in _PotentialValues.OrderByDescending(s => s.Length)) // look for longest values first, in case a potential value starts with the entirety of another potential value
+			{
+				if (script.StartsWith(value, StringComparison.InvariantCultureIgnoreCase))
+				{
+					setVariable(_VariableName, script.Substring(0, value.Length)); // we could use the predefined value here, but we take it from the script instead so that it has the casing from there
+					return script.Substring(value.Length);
+				}
+			}
+			return null;
+		}
+
+		public override string GenerateScript(Dictionary<string, object> variables)
+		{
+			if (!variables.ContainsKey(_VariableName))
+				throw new ArgumentOutOfRangeException(string.Format("Variable '{0}' does not exist.", _VariableName));
+			var value = variables[_VariableName];
+			if (!(value is string))
+				throw new FormatException(string.Format("Variable '{0}' is not a string.", _VariableName));
+			if (!_PotentialValues.Contains((string)value, StringComparer.InvariantCultureIgnoreCase))
+				throw new ArgumentException(string.Format("Variable '{0}' does not match any of the expected values. Found value: '{1}' Allowed values: '{2}'", _VariableName, value, string.Join("|", _PotentialValues)));
+			
+			return (string)value;
+		}
+	}
+
+	public class CommaSeparatedIdentifiersPart : IdentifierPart
+	{
+		public CommaSeparatedIdentifiersPart(string VariableName) : base(VariableName)
+		{
+			
+		}
+
+		private static Regex separator = new Regex(@"\A," + Database.SqlWhitespaceOrCommentRegex + "*");
+
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
+		{
 			var values = new Dictionary<string, List<string>>();
 			Action<string, object> setMultiVar = (name, value) => {
 				if (!values.ContainsKey(name))
@@ -321,21 +297,17 @@ namespace SchemaZen.model.ScriptBuilder
 					values[name] = new List<string>();
 				}
 				if (!(value is string))
-					throw new FormatException(string.Format("Variable {0} is expected to be a list of strings.", _Variable.Name));
+					throw new FormatException(string.Format("Variable {0} is expected to be a list of strings.", VariableName));
 				values[name].Add((string)value);
 			};
 
-			var first = true;
-			var components = _Prefix.Concat(new[] { _Variable }).Concat(_Suffix);
-			while (true)
+			while ((script = base.ConsumeScript(setMultiVar, script)) != null)
 			{
-				var remaining = script;
-				var result = VariablesFromScript(first ? components : _Separator.Concat(components), remaining, setMultiVar);
-				first = false;
-				if (result.Key == null)
-					script = result.Value;
-				else
+				var match = separator.Match(script);
+				if (!match.Success)
 					break;
+				else
+					script = script.Substring(match.Length);
 			}
 			foreach (var kvp in values)
 			{
@@ -347,37 +319,27 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
-			if (!variables.ContainsKey(_Variable.Name))
-				throw new ArgumentOutOfRangeException(string.Format("Variable '{0}' does not exist.", _Variable.Name));
-			if (!(variables[_Variable.Name] is IEnumerable<string>))
-				throw new FormatException(string.Format("Variable '{0}' is not a string enumerable.", _Variable.Name));
+			if (!variables.ContainsKey(VariableName))
+				throw new ArgumentOutOfRangeException(string.Format("Variable '{0}' does not exist.", VariableName));
+			if (!(variables[VariableName] is IEnumerable<string>))
+				throw new FormatException(string.Format("Variable '{0}' is not a string enumerable.", VariableName));
 
 			var sb = new StringBuilder();
-			var values = (IEnumerable<string>)variables[_Variable.Name];
+			var values = (IEnumerable<string>)variables[VariableName];
 			var first = true;
 			foreach (var value in values)
 			{
 				if (!first)
 				{
-					foreach (var part in _Separator)
-						sb.Append(part.GenerateScript(variables));
+					sb.Append(", ");
 				}
 				else
 				{
 					first = false;
 				}
-				foreach (var part in _Prefix)
-					sb.Append(part.GenerateScript(variables));
-				sb.Append(value);
-				foreach (var part in _Suffix)
-					sb.Append(part.GenerateScript(variables));
+				sb.Append(GenerateScript(value));
 			}
 			return sb.ToString();
-		}
-
-		public override int PeekNextOccurrence(string script)
-		{
-			throw new NotSupportedException();
 		}
 	}
 
@@ -417,7 +379,7 @@ namespace SchemaZen.model.ScriptBuilder
 			return ScriptFromComponents(_Contents, variables);
 		}
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
 			// look for the contents regardless of whether the variable is already set or not / whether or not the set value matches the Skip Regex
 
@@ -427,7 +389,7 @@ namespace SchemaZen.model.ScriptBuilder
 			var result = VariablesFromScript(_Contents, script, setVar);
 			if (result.Key != null)
 			{
-				return script;
+				return script; // unable to find contents, as it is a MaybePart, return the script unconsumed
 			}
 			else
 			{
@@ -436,11 +398,6 @@ namespace SchemaZen.model.ScriptBuilder
 					setVariable(kvp.Key, kvp.Value);
 				return result.Value;
 			}
-		}
-
-		public override int PeekNextOccurrence(string script)
-		{
-			throw new NotSupportedException();
 		}
 	}
 
@@ -457,7 +414,7 @@ namespace SchemaZen.model.ScriptBuilder
 				throw new ArgumentNullException(nameof(Contents));
 		}
 
-		public override string ConsumeScript(Action<string, object> setVariable, string script, ScriptPart next)
+		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
 			// try each content to see if it is consumable... stop when none are.
 			var unconsumed = _Contents.ToList();
@@ -468,8 +425,8 @@ namespace SchemaZen.model.ScriptBuilder
 				
 				foreach (var component in unconsumed.ToArray())
 				{
-					var remaining = component.ConsumeScript(setVariable, script, null);
-					if (remaining != script)
+					var remaining = component.ConsumeScript(setVariable, script);
+					if (remaining != script && remaining != null)
 					{
 						unconsumed.Remove(component);
 						consumed++;
@@ -492,11 +449,6 @@ namespace SchemaZen.model.ScriptBuilder
 			foreach (var component in _Contents)
 				sb.Append(component.GenerateScript(variables));
 			return sb.ToString();
-		}
-
-		public override int PeekNextOccurrence(string script)
-		{
-			throw new NotSupportedException();
 		}
 	}
 }
