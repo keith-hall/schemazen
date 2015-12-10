@@ -75,12 +75,14 @@ namespace SchemaZen.model.ScriptBuilder
 				if (!variables[name].GetType().Equals(value.GetType()))
 					throw new FormatException(string.Format("Variable '{0}' is a {1}, yet part of the script is expecting it to be a {2}.", name, variables[name].GetType().Name, value.GetType().Name));
 				var equals = variables[name].Equals(value);
-				if (!equals && value is string)
-				{
-					equals = string.Equals((string)variables[name], (string)value, StringComparison.InvariantCultureIgnoreCase);
+				if (!equals) {
+					if (value is string)
+						equals = string.Equals((string)variables[name], (string)value, StringComparison.InvariantCultureIgnoreCase);
+					else if (value is IEnumerable<string>)
+						equals = ((IEnumerable<string>)value).SequenceEqual((IEnumerable<string>)variables[name]);
 				}
 				if (!equals)
-					throw new FormatException(string.Format("Variable '{0}' is '{1}', yet part of the script is expecting it to be '{2}'.", name, variables[name], value));
+					throw new FormatException(string.Format("Variable '{0}' is '{1}', yet part of the script is expecting it to be '{2}'.", name, variables[name] is IEnumerable<string> ? string.Join(", ", ((IEnumerable<string>)variables[name]).ToArray()) : variables[name], value is IEnumerable<string> ? string.Join(", ", ((IEnumerable<string>)value).ToArray()) : value));
 			}
 			else
 			{
