@@ -20,6 +20,7 @@ namespace SchemaZen.model.ScriptBuilder
 			return sb.ToString();
 		}
 
+		private const string optionalWhitespaceAround = ",./()-+";
 		internal static KeyValuePair<ScriptPart, string> VariablesFromScript(IEnumerable<ScriptPart> components, string script, Action<string, object> setVariable)
 		{
 			var parts = components.ToArray();
@@ -44,7 +45,9 @@ namespace SchemaZen.model.ScriptBuilder
 					else
 					{
 						// if this part is a whitespace part and the next part is a constant that starts with a character that means this whitespace is optional
-						if (i < parts.Length - 1 && parts[i] is WhitespacePart && parts[i + 1] is ConstPart && ",./()-+".Contains(((ConstPart)parts[i + 1]).Text.Substring(1)))
+						// or this part is a whitespace part and the prev part was a constant that ended with a character that means this whitespace is optional
+						if ((i < parts.Length - 1 && parts[i] is WhitespacePart && parts[i + 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i + 1]).Text[0])) ||
+							(i > 0                && parts[i] is WhitespacePart && parts[i - 1] is ConstPart && optionalWhitespaceAround.Contains(((ConstPart)parts[i - 1]).Text.Last())))
 						{
 							script = remaining;
 							continue;
