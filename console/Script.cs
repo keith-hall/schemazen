@@ -28,7 +28,7 @@ namespace SchemaZen.console {
 
 		public override int Run(string[] args) {
 			if (!Overwrite && Directory.Exists(ScriptDir)) {
-				if (!ConsoleQuestion.AskYN(string.Format("{0} already exists - do you want to replace it", ScriptDir)))
+				if (!ConsoleQuestion.AskYN(string.Format("Script folder {0} already exists - do you want to replace it", ScriptDir)))
 					return 1;
 			}
 
