@@ -133,7 +133,6 @@ namespace SchemaZen.model {
 					return typeof (int);
 				case "uniqueidentifier":
 					return typeof (Guid);
-				case "binary":
 				case "varbinary":
 				case "image":
 					return typeof (byte[]);
