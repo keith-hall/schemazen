@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Data.SqlClient;
-using System.Diagnostics;
 using System.Reflection;
 using ManyConsole;
 using NDesk.Options;
@@ -24,9 +23,6 @@ namespace SchemaZen.console {
 				"o|overwrite=",
 				"Overwrite existing target without prompt.",
 				o => Overwrite = o != null);
-			HasOption("v|verbose=",
-				"Verbose output of actions.",
-				o => Verbose = o != null);
 		}
 
 		protected string Server { get; set; }
@@ -35,7 +31,6 @@ namespace SchemaZen.console {
 		protected string Pass { get; set; }
 		protected string ScriptDir { get; set; }
 		protected bool Overwrite { get; set; }
-		protected bool Verbose { get; set; }
 
 		protected Database CreateDatabase() {
 			var builder = new SqlConnectionStringBuilder {
@@ -52,16 +47,6 @@ namespace SchemaZen.console {
 				Connection = builder.ToString(),
 				Dir = ScriptDir
 			};
-		}
-
-		protected void Log(TraceLevel level, string message)
-		{
-			if (level == TraceLevel.Verbose && !Verbose)
-				return;
-			if (message.EndsWith("\r"))
-				Console.Write(message);
-			else
-				Console.WriteLine(message);
 		}
 	}
 }

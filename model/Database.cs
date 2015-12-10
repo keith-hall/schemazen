@@ -963,40 +963,38 @@ where name = @dbname
 
 		#region Script
 
-		public void ScriptToDir(Action<TraceLevel, string> log, string tableHint = null) {
+		public void ScriptToDir(string tableHint = null, Action<string, string, int, int> callback = null) {
 			if (Directory.Exists(Dir)) {
-				log(TraceLevel.Verbose, "Deleting existing files...");
 				// delete the existing script files
 				var files = dirs.Select(dir => Path.Combine(Dir, dir))
 					.Where(Directory.Exists).SelectMany(Directory.GetFiles);
 				foreach (var f in files) {
 					File.Delete(f);
 				}
-				log(TraceLevel.Verbose, "Existing files deleted.");
 			} else {
 				Directory.CreateDirectory(Dir);
 			}
 
-			WritePropsScript(log);
-			WriteSchemaScript(log);
-			WriteScriptDir("tables", Tables.Concat(TableTypes).ToArray(), log);
-			WriteScriptDir("foreign_keys", ForeignKeys.ToArray(), log);
+			WritePropsScript();
+			WriteSchemaScript();
+			WriteScriptDir("tables", Tables.Concat(TableTypes).ToArray(), callback);
+			WriteScriptDir("foreign_keys", ForeignKeys.ToArray(), callback);
 			foreach (var routineType in Routines.GroupBy(x => x.RoutineType)) {
 				var dir = routineType.Key.ToString().ToLower() + "s";
-				WriteScriptDir(dir, routineType.ToArray(), log);
+				WriteScriptDir(dir, routineType.ToArray(), callback);
 			}
-			WriteScriptDir("views", ViewIndexes.ToArray(), log);
-			WriteScriptDir("assemblies", Assemblies.ToArray(), log);
-			WriteScriptDir("users", Users.ToArray(), log);
-			WriteScriptDir("synonyms", Synonyms.ToArray(), log);
+			WriteScriptDir("views", ViewIndexes.ToArray(), callback);
+			WriteScriptDir("assemblies", Assemblies.ToArray(), callback);
+			WriteScriptDir("users", Users.ToArray(), callback);
+			WriteScriptDir("synonyms", Synonyms.ToArray(), callback);
 
-			ExportData(log, tableHint);
+			ExportData(tableHint, callback);
 
-			log(TraceLevel.Verbose, string.Empty);
+			if (callback != null)
+				callback("complete", null, 0, 0);
 		}
 
-		private void WritePropsScript(Action<TraceLevel, string> log) {
-			log(TraceLevel.Verbose, "Scripting database properties...");
+		private void WritePropsScript() {
 			var text = new StringBuilder();
 			text.Append(ScriptPropList(Props));
 			text.AppendLine("GO");
@@ -1004,8 +1002,7 @@ where name = @dbname
 			File.WriteAllText(string.Format("{0}/props.sql", Dir), text.ToString());
 		}
 
-		private void WriteSchemaScript(Action<TraceLevel, string> log) {
-			log(TraceLevel.Verbose, "Scripting database schemas...");
+		private void WriteSchemaScript() {
 			var text = new StringBuilder();
 			foreach (var schema in Schemas) {
 				text.Append(schema.ScriptCreate());
@@ -1015,20 +1012,21 @@ where name = @dbname
 			File.WriteAllText(string.Format("{0}/schemas.sql", Dir), text.ToString());
 		}
 
-		private void WriteScriptDir(string name, ICollection<IScriptable> objects, Action<TraceLevel, string> log)
+		private void WriteScriptDir(string name, IEnumerable<IScriptable> objects, Action<string, string, int, int> callback = null)
 		{
 			if (!objects.Any()) return;
 			var dir = Path.Combine(Dir, name);
 			Directory.CreateDirectory(dir);
 			var index = 0;
+			var total = objects.Count();
 			foreach (var o in objects) {
-				log(TraceLevel.Verbose, string.Format("Scripting {0} {1} of {2}...\r", name, ++index, objects.Count));
+				if (callback != null)
+					callback("script", name, ++index, total);
 
 				var filePath = Path.Combine(dir, MakeFileName(o) + ".sql");
 				var script = o.ScriptCreate() + "\r\nGO\r\n";
 				File.AppendAllText(filePath, script);
 			}
-			log(TraceLevel.Verbose, string.Empty); // clear carriage return
 		}
 
 		private static string MakeFileName(object o) {
@@ -1060,21 +1058,19 @@ where name = @dbname
 			return fileName;
 		}
 
-		public void ExportData(Action<TraceLevel, string> log, string tableHint = null) {
+		public void ExportData(string tableHint = null, Action<string, string, int, int> callback = null) {
 			var dataDir = Dir + "/data";
 			if (!Directory.Exists(dataDir)) {
 				Directory.CreateDirectory(dataDir);
 			}
-			if (DataTables.Any()) {
-				log(TraceLevel.Info, "Exporting data...");
-				var index = 0;
-				foreach (var t in DataTables) {
-					log(TraceLevel.Verbose, string.Format("Exporting data from {0} (table {1} of {2})...", t.Owner + "." + t.Name, ++index, DataTables.Count));
-					var sw = File.CreateText(dataDir + "/" + MakeFileName(t) + ".tsv");
-					t.ExportData(Connection, sw, tableHint);
-					sw.Flush();
-					sw.Close();
-				}
+			var index = 0;
+			foreach (var t in DataTables) {
+				if (callback != null)
+					callback("data", t.Owner + "." + t.Name, ++index, DataTables.Count);
+				var sw = File.CreateText(dataDir + "/" + MakeFileName(t) + ".tsv");
+				t.ExportData(Connection, sw, tableHint);
+				sw.Flush();
+				sw.Close();
 			}
 		}
 

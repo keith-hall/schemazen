@@ -5,7 +5,13 @@ using SchemaZen.model;
 
 namespace SchemaZen.console {
 	public class Create : DbCommand {
-		public Create () : base("Create", "Create the specified database from scripts.") { }
+		public Create () : base("Create", "Create the specified database from scripts.") {
+			HasOption("v|verbose=",
+				"Verbose output of actions.",
+				o => Verbose = o != null);
+		}
+
+		protected bool Verbose;
 
 		public override int Run(string[] remainingArguments) {
 			var db = CreateDatabase();
@@ -16,21 +22,22 @@ namespace SchemaZen.console {
 				return 1;
 			}
 
-			Log(TraceLevel.Verbose, "Checking if database already exists...");
+			if (Verbose)
+				Console.WriteLine("Checking if database already exists...");
 			if (DBHelper.DbExists(db.Connection) && !Overwrite) {
 				if (!ConsoleQuestion.AskYN(string.Format("{0} {1} already exists - do you want to drop it", Server, DbName))) {
-					Log(TraceLevel.Info, "Create command cancelled.");
+					Console.WriteLine("Create command cancelled.");
 					return 1;
 				}
 				Overwrite = true;
 			}
 
-			var prevColor = Console.ForegroundColor;
+			ConsoleColor prevColor = Console.ForegroundColor;
 
 			try {
 				db.CreateFromDir(Overwrite, Log);
-				Log(TraceLevel.Info, string.Empty);
-				Log(TraceLevel.Info, "Database created successfully.");
+				Console.WriteLine();
+				Console.WriteLine("Database created successfully.");
 			} catch (BatchSqlFileException ex) {
 				Console.WriteLine();
 				Console.ForegroundColor = ConsoleColor.Red;
@@ -54,6 +61,15 @@ namespace SchemaZen.console {
 			}
 
 			return 0;
+		}
+
+		private void Log (TraceLevel level, string message) {
+			if (level == TraceLevel.Verbose && !Verbose)
+				return;
+			if (message.EndsWith("\r"))
+				Console.Write(message);
+			else
+				Console.WriteLine(message);
 		}
 	}
 }
