@@ -98,8 +98,8 @@ namespace SchemaZen.model.ScriptBuilder
 				throw new FormatException(string.Format("Script does not match component.{2}Script component: '{0}'{2}Remaining script: '{1}'", result.Key, result.Value, Environment.NewLine));
 			if (result.Value.Length > 0)
 			{
-				var trailing = WhitespacePart.ConsumeScript(result.Value);
-				if (trailing == null || trailing.Length > 0)
+				var trailing = WhitespacePart.ConsumeScript(result.Value); // ignore whitespace and comments
+				if (trailing == null || trailing.Length > 0) // if it wasn't whitespace at the start of the remaining string, or there is still some non-whitespace left
 					throw new FormatException(string.Format("Script contains some unexpected trailing text:{0}{1}", Environment.NewLine, trailing ?? result.Value));
 			}
 			return variables;
