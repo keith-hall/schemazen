@@ -210,7 +210,10 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string GenerateScript(Dictionary<string, object> variables)
 		{
-			return new string(Enumerable.Repeat(_PreferredChar, _PreferredCount).ToArray());
+			if (_PreferredChar == '\n')
+				return string.Join(string.Empty, Enumerable.Repeat(Environment.NewLine, _PreferredCount).ToArray());
+			else
+				return new string(Enumerable.Repeat(_PreferredChar, _PreferredCount).ToArray());
 		}
 	}
 
