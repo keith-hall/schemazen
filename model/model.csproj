@@ -51,7 +51,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DatabaseDiff.cs" />
+    <Compile Include="Diff\ColumnDiff.cs" />
+    <Compile Include="Diff\DatabaseDiff.cs" />
     <Compile Include="ScriptBuilder\ScriptPart.cs" />
     <Compile Include="SqlAssembly.cs" />
     <Compile Include="Column.cs" />
@@ -68,7 +69,7 @@
     <Compile Include="SqlUser.cs" />
     <Compile Include="Synonym.cs" />
     <Compile Include="Table.cs" />
-    <Compile Include="TableDiff.cs" />
+    <Compile Include="Diff\TableDiff.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\helpers\helpers.csproj">
