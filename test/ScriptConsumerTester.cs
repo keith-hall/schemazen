@@ -60,7 +60,7 @@ namespace SchemaZen.test
 			Assert.AreEqual(d["Table.Owner"], "dbo");
 			Assert.AreEqual(d["Table.Name"], "name");
 
-			components = new ScriptPart[] { new ConstPart("SELECT"), new WhitespacePart(), new CommaSeparatedIdentifiersPart(VariableName: "test") };
+			components = new ScriptPart[] { new ConstPart("SELECT"), new WhitespacePart(), new MultipleSeparatedIdentifiersPart(VariableName: "test", Separator: ",") };
 			d = ScriptPart.VariablesFromScript(components.Concat(components), "SELECT hello,a1,b2,c3 select hello, a1,[b2], c3 ");
 		}
 
@@ -77,7 +77,7 @@ namespace SchemaZen.test
 		[ExpectedException(typeof(FormatException))]
 		public void TestCommaSeparatedIdentifierInconsistentValue()
 		{
-			var components = new ScriptPart[] { new ConstPart("SELECT"), new WhitespacePart(), new CommaSeparatedIdentifiersPart(VariableName: "test") };
+			var components = new ScriptPart[] { new ConstPart("SELECT"), new WhitespacePart(), new MultipleSeparatedIdentifiersPart(VariableName: "test", Separator: ",") };
 			var d = ScriptPart.VariablesFromScript(components.Concat(components), "SELECT hello,a1,b2,c3 select hello, world ");
 		}
 

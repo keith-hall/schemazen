@@ -177,7 +177,7 @@ namespace SchemaZen.model.ScriptBuilder
 	{
 		private char _PreferredChar;
 		private int _PreferredCount;
-		private static Regex wsConsume = new Regex(@"\A" + Database.SqlWhitespaceOrCommentRegex + "+");
+		internal static Regex wsConsume = new Regex(@"\A" + Database.SqlWhitespaceOrCommentRegex + "+");
 		private static Regex wsPeek = new Regex(@"\s");
 
 		public WhitespacePart(char PreferredChar = ' ', int PreferredCount = 1)
@@ -308,14 +308,16 @@ namespace SchemaZen.model.ScriptBuilder
 		}
 	}
 
-	public class CommaSeparatedIdentifiersPart : IdentifierPart
+	public class MultipleSeparatedIdentifiersPart : IdentifierPart
 	{
-		public CommaSeparatedIdentifiersPart(string VariableName) : base(VariableName)
-		{
-			
-		}
+		private string _separator;
+		private bool _includeWS;
 
-		private static Regex separator = new Regex(@"\A," + Database.SqlWhitespaceOrCommentRegex + "*");
+		public MultipleSeparatedIdentifiersPart(string VariableName, string Separator) : base(VariableName)
+		{
+			_separator = Separator;
+			_includeWS = (Separator != ".");
+		}
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
@@ -332,11 +334,14 @@ namespace SchemaZen.model.ScriptBuilder
 
 			while ((script = base.ConsumeScript(setMultiVar, script)) != null)
 			{
-				var match = separator.Match(script);
-				if (!match.Success)
+				if (!script.StartsWith(_separator))
 					break;
-				else
-					script = script.Substring(match.Length);
+				else {
+					script = script.Substring(_separator.Length);
+					var skipWS = WhitespacePart.ConsumeScript(script);
+					if (skipWS != null)
+						script = skipWS;
+				}
 			}
 			foreach (var kvp in values)
 			{
@@ -360,7 +365,9 @@ namespace SchemaZen.model.ScriptBuilder
 			{
 				if (!first)
 				{
-					sb.Append(", ");
+					sb.Append(_separator);
+					if (_includeWS)
+						sb.Append(" ");
 				}
 				else
 				{

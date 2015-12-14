@@ -62,7 +62,7 @@ namespace SchemaZen.model {
 			yield return new IdentifierPart(VariableName: "Name");
 			foreach (var part in ConstPart.FromString(Environment.NewLine + "   FOREIGN KEY ("))
 				yield return part;
-			yield return new CommaSeparatedIdentifiersPart(VariableName: "Columns");
+			yield return new MultipleSeparatedIdentifiersPart(VariableName: "Columns", Separator: ",");
 			foreach (var part in ConstPart.FromString(") REFERENCES "))
 				yield return part;
 			yield return new IdentifierPart(VariableName: "RefTable.Owner");
@@ -70,7 +70,7 @@ namespace SchemaZen.model {
 			yield return new IdentifierPart(VariableName: "RefTable.Name");
 			foreach (var part in ConstPart.FromString(" ("))
 				yield return part;
-			yield return new CommaSeparatedIdentifiersPart(VariableName: "RefColumns");
+			yield return new MultipleSeparatedIdentifiersPart(VariableName: "RefColumns", Separator: ",");
 			foreach (var part in ConstPart.FromString(")" + Environment.NewLine))
 				yield return part;
 			
