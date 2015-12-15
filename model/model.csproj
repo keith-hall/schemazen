@@ -53,6 +53,7 @@
   <ItemGroup>
     <Compile Include="Diff\ColumnDiff.cs" />
     <Compile Include="Diff\DatabaseDiff.cs" />
+    <Compile Include="Trigger.cs" />
     <Compile Include="ScriptBuilder\ScriptPart.cs" />
     <Compile Include="SqlAssembly.cs" />
     <Compile Include="Column.cs" />

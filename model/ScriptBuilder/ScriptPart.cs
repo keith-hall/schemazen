@@ -23,7 +23,7 @@ namespace SchemaZen.model.ScriptBuilder
 		private const string optionalWhitespaceAround = ",./()-+";
 		internal static KeyValuePair<ScriptPart, string> VariablesFromScript(IEnumerable<ScriptPart> components, string script, Action<string, object> setVariable)
 		{
-			var parts = components.ToArray();
+			var parts = new[] { new WhitespacePart() }.Concat(components).ToArray();
 			for (var i = 0; i < parts.Length; i++)
 			{
 				// if the previous part was an identifier or a whitespace part and this is a whitespace part
@@ -382,19 +382,21 @@ namespace SchemaZen.model.ScriptBuilder
 	public class MaybePart : ScriptPart
 	{
 		private string _Variable;
-		private string _SkipIfRegexMatch;
+		private string[] _SkipGenerationIfVariableMatchesAny;
 		private ScriptPart[] _Contents;
 
-		public MaybePart (string Variable, string SkipIfRegexMatch, IEnumerable<ScriptPart> Contents)
+		public MaybePart (string Variable, IEnumerable<string> SkipGenerationIfVariableValueMatchesAny, IEnumerable<ScriptPart> Contents)
 		{
 			if (string.IsNullOrEmpty(Variable))
 				throw new ArgumentNullException(nameof(Variable));
-			if (string.IsNullOrEmpty(SkipIfRegexMatch))
-				throw new ArgumentNullException(nameof(SkipIfRegexMatch));
+			if (SkipGenerationIfVariableValueMatchesAny == null)
+				throw new ArgumentNullException(nameof(SkipGenerationIfVariableValueMatchesAny));
 			if (Contents == null)
 				throw new ArgumentNullException(nameof(Contents));
 			_Variable = Variable;
-			_SkipIfRegexMatch = SkipIfRegexMatch;
+			_SkipGenerationIfVariableMatchesAny = SkipGenerationIfVariableValueMatchesAny.ToArray();
+			if (!_SkipGenerationIfVariableMatchesAny.Any())
+				throw new ArgumentNullException(nameof(SkipGenerationIfVariableValueMatchesAny));
 			_Contents = Contents.ToArray();
 			if (!_Contents.Any())
 				throw new ArgumentNullException(nameof(Contents));
@@ -409,7 +411,7 @@ namespace SchemaZen.model.ScriptBuilder
 			if (!(value is string))
 				throw new FormatException(string.Format("Variable '{0}' is not a string.", _Variable));
 
-			if (Regex.IsMatch((string)value, _SkipIfRegexMatch))
+			if (_SkipGenerationIfVariableMatchesAny.Contains((string)value, StringComparer.InvariantCultureIgnoreCase))
 				return string.Empty;
 
 			return ScriptFromComponents(_Contents, variables);
@@ -417,7 +419,7 @@ namespace SchemaZen.model.ScriptBuilder
 
 		public override string ConsumeScript(Action<string, object> setVariable, string script)
 		{
-			// look for the contents regardless of whether the variable is already set or not / whether or not the set value matches the Skip Regex
+			// look for the contents regardless of whether the variable is already set or not / whether or not the set value matches one to skip
 
 			var values = new Dictionary<string, object>();
 			Action<string, object> setVar = (name, value) => SetVariableIfNotDifferent(values, name, value);

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using SchemaZen.model.ScriptBuilder;
 
 namespace SchemaZen.model {
 	public class Routine : INameable, IHasOwner {
@@ -19,9 +20,6 @@ namespace SchemaZen.model {
 		public RoutineKind RoutineType;
 		public string Owner { get; set; }
 		public string Text;
-		public bool Disabled;
-		public string RelatedTableSchema;
-		public string RelatedTableName;
 		public Database Db;
 
 		private const string SqlCreateRegex =
@@ -36,40 +34,51 @@ namespace SchemaZen.model {
 			Owner = owner;
 			Name = name;
 			Db = db;
-		}
 
-		private string ScriptQuotedIdAndAnsiNulls(Database db, bool databaseDefaults) {
-			var script = "";
-			var defaultQuotedId = !QuotedId;
-			if (db != null && db.FindProp("QUOTED_IDENTIFIER") != null) {
-				defaultQuotedId = db.FindProp("QUOTED_IDENTIFIER").Value == "ON";
-			}
-			if (defaultQuotedId != QuotedId) {
-				script += string.Format(@"SET QUOTED_IDENTIFIER {0} {1}GO{1}",
-					((databaseDefaults ? defaultQuotedId : QuotedId) ? "ON" : "OFF"), Environment.NewLine);
-			}
-			var defaultAnsiNulls = !AnsiNull;
-			if (db != null && db.FindProp("ANSI_NULLS") != null) {
-				defaultAnsiNulls = db.FindProp("ANSI_NULLS").Value == "ON";
-			}
-			if (defaultAnsiNulls != AnsiNull) {
-				script += string.Format(@"SET ANSI_NULLS {0} {1}GO{1}",
-					((databaseDefaults ? defaultAnsiNulls : AnsiNull) ? "ON" : "OFF"), Environment.NewLine);
-			}
-			return script;
-		}
+			if (db != null)
+			{
+				var prop = db.FindProp("QUOTED_IDENTIFIER");
+				if (prop != null)
+					QuotedId = prop.Value == "ON";
 
-		private string ScriptBase(string definition) {
-			var before = ScriptQuotedIdAndAnsiNulls(Db, false);
-			var after = ScriptQuotedIdAndAnsiNulls(Db, true);
-			if (!string.IsNullOrEmpty(after))
+				prop = db.FindProp("ANSI_NULLS");
+				if (prop != null)
+					AnsiNull = prop.Value == "ON";
+			}
+		}
+		
+		protected virtual string ScriptBase(string definition)
+		{
+			var dbQuotedId = string.Empty;
+			var dbAnsiNulls = string.Empty;
+			if (Db != null)
+			{
+				var prop = Db.FindProp("QUOTED_IDENTIFIER");
+				if (prop != null)
+					dbQuotedId = prop.Value;
+
+				prop = Db.FindProp("ANSI_NULLS");
+				if (prop != null)
+					dbAnsiNulls = prop.Value;
+			}
+
+			var props = GetScriptPropComponents(dbQuotedId, dbAnsiNulls);
+			var d = new Dictionary<string, object>();
+			d["QuotedId"] = QuotedId ? "ON" : "OFF";
+			d["AnsiNulls"] = AnsiNull ? "ON" : "OFF";
+
+			var before = ScriptPart.ScriptFromComponents(props, d);
+
+			props = GetScriptPropComponents((string)d["QuotedId"], (string)d["AnsiNulls"]);
+			d["QuotedId"] = dbQuotedId;
+			d["AnsiNulls"] = dbAnsiNulls;
+			var after = ScriptPart.ScriptFromComponents(props, d);
+
+			if (after != string.Empty)
+			{
 				after = Environment.NewLine + "GO" + Environment.NewLine + after;
-
-			if (RoutineType == RoutineKind.Trigger)
-				after +=
-					string.Format("{0} TRIGGER [{1}].[{2}] ON [{3}].[{4}]", Disabled ? "DISABLE" : "ENABLE", Owner, Name,
-						RelatedTableSchema, RelatedTableName) + Environment.NewLine + "GO" + Environment.NewLine;
-
+			}
+			
 			if (string.IsNullOrEmpty(definition))
 				definition = string.Format("/* missing definition for {0} [{1}].[{2}] */", RoutineType, Owner, Name);
 
@@ -80,6 +89,74 @@ namespace SchemaZen.model {
 			return ScriptBase(Text);
 		}
 
+		public static IEnumerable<ScriptPart> GetScriptPropComponents(string QuotedId, string AnsiNulls)
+		{
+			yield return new AnyOrderPart(Contents: new[] { new MaybePart(Variable: "QuotedId", SkipGenerationIfVariableValueMatchesAny: new[] { QuotedId, string.Empty }, Contents: new ScriptPart[] { new ConstPart("SET"), new WhitespacePart(), new ConstPart("QUOTED_IDENTIFIER"), new WhitespacePart(), new OneOfPredefinedValuesPart(VariableName: "QuotedId", PotentialValues: new[] { "ON", "OFF" }), new WhitespacePart(PreferredChar: '\n'), new ConstPart(Text: "GO"), new WhitespacePart(PreferredChar: '\n') }), new MaybePart(Variable: "AnsiNulls", SkipGenerationIfVariableValueMatchesAny: new[] { AnsiNulls, string.Empty }, Contents: new ScriptPart[] { new ConstPart("SET"), new WhitespacePart(), new ConstPart("ANSI_NULLS"), new WhitespacePart(), new OneOfPredefinedValuesPart(VariableName: "AnsiNulls", PotentialValues: new[] { "ON", "OFF" }), new WhitespacePart(PreferredChar: '\n'), new ConstPart(Text: "GO"), new WhitespacePart(PreferredChar: '\n') }) });
+		}
+
+		internal static Dictionary<string, object> VarsFromScript(string script, Database db)
+		{
+			var d = new Dictionary<string, object>();
+			var batches = helpers.BatchSqlParser.SplitBatch(script).ToList();
+			var dbQuotedId = string.Empty;
+			var dbAnsiNulls = string.Empty;
+
+			if (db != null)
+			{
+				var prop = db.FindProp("QUOTED_IDENTIFIER");
+				if (prop != null)
+					dbQuotedId = prop.Value;
+
+				prop = db.FindProp("ANSI_NULLS");
+				if (prop != null)
+					dbAnsiNulls = prop.Value;
+			}
+
+			if (batches.Count > 1)
+			{
+				var props = GetScriptPropComponents(dbQuotedId, dbAnsiNulls);
+				foreach (var batch in batches.ToArray().Take(2))
+				{
+					var result = ScriptPart.VariablesFromScript(props, batch + Environment.NewLine + "GO" + Environment.NewLine, (name, value) => ScriptPart.SetVariableIfNotDifferent(d, name, value));
+					if (string.IsNullOrEmpty(result.Value))
+						batches.Remove(batch);
+				}
+			}
+			
+			var components = new ScriptPart[] { new ConstPart(Text: "CREATE"), new WhitespacePart(), new OneOfPredefinedValuesPart(VariableName: "RoutineKind", PotentialValues: new[] { "PROCEDURE", "PROC", "FUNCTION", "TRIGGER", "VIEW", "XML SCHEMA COLLECTION" }), new IdentifierPart(VariableName: "Owner"), new ConstPart(Text: "."), new IdentifierPart(VariableName: "Name") };
+			ScriptPart.VariablesFromScript(components, batches.First(), (name, value) => ScriptPart.SetVariableIfNotDifferent(d, name, value));
+			d["Text"] = batches.First();
+			d["Batches"] = batches.Skip(1).ToList();
+			if (!d.ContainsKey("QuotedId"))
+				d["QuotedId"] = dbQuotedId;
+			if (!d.ContainsKey("AnsiNulls"))
+				d["AnsiNulls"] = dbAnsiNulls;
+			
+			var firstWord = ((string)d["RoutineKind"]).Split(new[] { ' ' }).First();
+			foreach (var e in Enum.GetNames(typeof(RoutineKind)))
+				if (e.StartsWith(firstWord, StringComparison.InvariantCultureIgnoreCase))
+					d["RoutineKind"] = e;
+			return d;
+		}
+
+		public static Routine FromScript(string script, Database db)
+		{
+			var d = VarsFromScript(script, db);
+			
+			if (db.FindRoutine((string)d["Name"], (string)d["Owner"]) != null)
+				throw new InvalidOperationException(string.Format("Database model already contains the routine named {0}.{1} that is defined in this script.", d["Name"], d["Owner"]));
+
+			var r = new Routine((string)d["Owner"], (string)d["Name"], db);
+			r.Text = (string)d["Text"];
+			r.QuotedId = (string)d["QuotedId"] == "ON";
+			r.AnsiNull = (string)d["AnsiNulls"] == "ON";
+			r.RoutineType = (RoutineKind)Enum.Parse(typeof(RoutineKind), (string)d["RoutineKind"]);
+
+			db.Routines.Add(r);
+
+			return r;
+		}
+		
 		public string GetSQLTypeForRegEx() {
 			var text = GetSQLType();
 			if (RoutineType == RoutineKind.Procedure) // support shorthand - PROC

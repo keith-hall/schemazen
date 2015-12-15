@@ -15,7 +15,7 @@ namespace SchemaZen.model {
 		public Table RefTable;
 		public Table Table;
 
-		private const string defaultRules = @"\A\z|NO ACTION|RESTRICT";
+		private const string defaultRules = @"|NO ACTION|RESTRICT";
 		private const string possibleRules = @"NO ACTION|RESTRICT|CASCADE|SET NULL|SET DEFAULT";
 
 		public ForeignKey(string name) {
@@ -77,14 +77,14 @@ namespace SchemaZen.model {
 			yield return new AnyOrderPart
 			(
 				Contents: new[] {
-					new MaybePart(Variable: "OnUpdate", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON UPDATE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') })),
-					new MaybePart(Variable: "OnDelete", SkipIfRegexMatch: defaultRules, Contents: ConstPart.FromString("   ON DELETE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') }))
+					new MaybePart(Variable: "OnUpdate", SkipGenerationIfVariableValueMatchesAny: defaultRules.Split('|'), Contents: ConstPart.FromString("   ON UPDATE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnUpdate", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') })),
+					new MaybePart(Variable: "OnDelete", SkipGenerationIfVariableValueMatchesAny: defaultRules.Split('|'), Contents: ConstPart.FromString("   ON DELETE ").Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "OnDelete", PotentialValues: possibleRules.Split('|') ), new WhitespacePart(PreferredChar: '\n') }))
 				}
 			);
 			yield return new MaybePart
 			(
 				Variable: "Check",
-				SkipIfRegexMatch: @"\ACHECK\Z",
+				SkipGenerationIfVariableValueMatchesAny: new[] { "CHECK" },
 				Contents: ConstPart.FromString("   ALTER TABLE ").Concat(new ScriptPart[] { new IdentifierPart(VariableName: "Table.Owner"), new ConstPart(Text: "."), new IdentifierPart(VariableName: "Table.Name"), new WhitespacePart() }).Concat(new ScriptPart[] { new OneOfPredefinedValuesPart(VariableName: "Check", PotentialValues: new string[] { "NOCHECK" }) }).Concat(ConstPart.FromString(" CONSTRAINT ")).Concat(new ScriptPart[] { new IdentifierPart(VariableName: "Name"), new WhitespacePart(PreferredChar: '\n') })
 			);
 

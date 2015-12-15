@@ -299,7 +299,11 @@ namespace SchemaZen.model {
 					where objectproperty(o.object_id, 'IsMSShipped') = 0";
 			using (var dr = cm.ExecuteReader()) {
 				while (dr.Read()) {
-					var r = new Routine((string) dr["schemaName"], (string) dr["routineName"], this);
+					Routine r;
+					if ((string)dr["type_desc"] == "SQL_TRIGGER")
+						r = new Trigger((string)dr["schemaName"], (string)dr["routineName"], this);
+					else
+						r = new Routine((string)dr["schemaName"], (string)dr["routineName"], this);
 					r.Text = dr["definition"] is DBNull ? string.Empty : (string) dr["definition"];
 					r.AnsiNull = (bool) dr["uses_ansi_nulls"];
 					r.QuotedId = (bool) dr["uses_quoted_identifier"];
@@ -311,9 +315,10 @@ namespace SchemaZen.model {
 							break;
 						case "SQL_TRIGGER":
 							r.RoutineType = Routine.RoutineKind.Trigger;
-							r.RelatedTableName = (string) dr["tableName"];
-							r.RelatedTableSchema = (string) dr["tableSchema"];
-							r.Disabled = (bool) dr["trigger_disabled"];
+							Trigger t = (Trigger)r;
+							t.RelatedTableName = (string) dr["tableName"];
+							t.RelatedTableSchema = (string) dr["tableSchema"];
+							t.Disabled = (bool) dr["trigger_disabled"];
 							break;
 						case "SQL_SCALAR_FUNCTION":
 						case "SQL_INLINE_TABLE_VALUED_FUNCTION":
