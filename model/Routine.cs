@@ -152,6 +152,9 @@ namespace SchemaZen.model {
 			r.AnsiNull = (string)d["AnsiNulls"] == "ON";
 			r.RoutineType = (RoutineKind)Enum.Parse(typeof(RoutineKind), (string)d["RoutineKind"]);
 
+			if (r.RoutineType == RoutineKind.Trigger)
+				throw new InvalidCastException(string.Format("Routine in script is a trigger, and should be parsed from the {0} class.", nameof(Trigger)));
+
 			db.Routines.Add(r);
 
 			return r;
