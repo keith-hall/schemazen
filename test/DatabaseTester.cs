@@ -148,16 +148,16 @@ namespace SchemaZen.test {
 			var t1 = new Table("dbo", "t1");
 			t1.Columns.Add(new Column("col1", "int", false, null) {Position = 1});
 			t1.Columns.Add(new Column("col2", "int", false, null) {Position = 2});
-			t1.Constraints.Add(new Constraint("pk_t1", "PRIMARY KEY", "col1,col2"));
+			t1.AddConstraint(new Constraint("pk_t1", "PRIMARY KEY", "col1,col2"));
 			t1.FindConstraint("pk_t1").Clustered = true;
 
 			var t2 = new Table("dbo", "t2");
 			t2.Columns.Add(new Column("col1", "int", false, null) {Position = 1});
 			t2.Columns.Add(new Column("col2", "int", false, null) {Position = 2});
 			t2.Columns.Add(new Column("col3", "int", false, null) {Position = 3});
-			t2.Constraints.Add(new Constraint("pk_t2", "PRIMARY KEY", "col1"));
+			t2.AddConstraint(new Constraint("pk_t2", "PRIMARY KEY", "col1"));
 			t2.FindConstraint("pk_t2").Clustered = true;
-			t2.Constraints.Add(new Constraint("IX_col3", "UNIQUE", "col3"));
+			t2.AddConstraint(new Constraint("IX_col3", "UNIQUE", "col3"));
 
 			db.ForeignKeys.Add(new ForeignKey(t2, "fk_t2_t1", "col2,col3", t1, "col1,col2"));
 
@@ -184,7 +184,8 @@ namespace SchemaZen.test {
 		public void TestScriptTableType() {
 			var setupSQL1 = @"
 CREATE TYPE [dbo].[MyTableType] AS TABLE(
-	[ID] [nvarchar](250) NULL
+	[ID] [nvarchar](250) NULL,
+	[Value] [numeric](5, 1) NULL
 )
 
 ";
@@ -204,6 +205,8 @@ CREATE TYPE [dbo].[MyTableType] AS TABLE(
 
 			Assert.AreEqual(1, db.TableTypes.Count());
 			Assert.AreEqual(250, db.TableTypes[0].Columns.Items[0].Length);
+			Assert.AreEqual(1, db.TableTypes[0].Columns.Items[1].Scale);
+			Assert.AreEqual(5, db.TableTypes[0].Columns.Items[1].Precision);
 			Assert.AreEqual("MyTableType", db.TableTypes[0].Name);
 			Assert.IsTrue(File.Exists(db.Name + "\\table_types\\TYPE_MyTableType.sql"));
 
@@ -369,26 +372,21 @@ select * from Table1
 			var policy = new Table("dbo", "Policy");
 			policy.Columns.Add(new Column("id", "int", false, null) {Position = 1});
 			policy.Columns.Add(new Column("form", "tinyint", false, null) {Position = 2});
-			policy.Constraints.Add(new Constraint("PK_Policy", "PRIMARY KEY", "id"));
-			policy.Constraints[0].Clustered = true;
-			policy.Constraints[0].Unique = true;
+			policy.AddConstraint(new Constraint("PK_Policy", "PRIMARY KEY", "id") { Clustered = true, Unique = true });
 			policy.Columns.Items[0].Identity = new Identity(1, 1);
 
 			var loc = new Table("dbo", "Location");
 			loc.Columns.Add(new Column("id", "int", false, null) {Position = 1});
 			loc.Columns.Add(new Column("policyId", "int", false, null) {Position = 2});
 			loc.Columns.Add(new Column("storage", "bit", false, null) {Position = 3});
-			loc.Constraints.Add(new Constraint("PK_Location", "PRIMARY KEY", "id"));
-			loc.Constraints[0].Clustered = true;
-			loc.Constraints[0].Unique = true;
+			loc.AddConstraint(new Constraint("PK_Location", "PRIMARY KEY", "id") { Clustered = true, Unique = true });
 			loc.Columns.Items[0].Identity = new Identity(1, 1);
 
 			var formType = new Table("dbo", "FormType");
 			formType.Columns.Add(new Column("code", "tinyint", false, null) {Position = 1});
 			formType.Columns.Add(new Column("desc", "varchar", 10, false, null) {Position = 2});
-			formType.Constraints.Add(new Constraint("PK_FormType", "PRIMARY KEY", "code"));
-			formType.Constraints[0].Clustered = true;
-
+			formType.AddConstraint(new Constraint("PK_FormType", "PRIMARY KEY", "code") { Clustered = true, Unique = true });
+			
 			var fk_policy_formType = new ForeignKey("FK_Policy_FormType");
 			fk_policy_formType.Table = policy;
 			fk_policy_formType.Columns.Add("form");
@@ -405,13 +403,20 @@ select * from Table1
 			fk_location_policy.OnUpdate = "NO ACTION";
 			fk_location_policy.OnDelete = "CASCADE";
 
+			var tt_codedesc = new Table("dbo", "CodeDesc");
+			tt_codedesc.IsType = true;
+			tt_codedesc.Columns.Add(new Column("code", "tinyint", false, null) { Position = 1 });
+			tt_codedesc.Columns.Add(new Column("desc", "varchar", 10, false, null) { Position = 2 });
+			tt_codedesc.AddConstraint(new Constraint("PK_CodeDesc", "PRIMARY KEY", "code"));
+
 			var db = new Database("ScriptToDirTest");
 			db.Tables.Add(policy);
 			db.Tables.Add(formType);
 			db.Tables.Add(loc);
+			db.TableTypes.Add(tt_codedesc);
 			db.ForeignKeys.Add(fk_policy_formType);
 			db.ForeignKeys.Add(fk_location_policy);
-			db.FindProp("COMPATIBILITY_LEVEL").Value = "120";
+			db.FindProp("COMPATIBILITY_LEVEL").Value = "110";
 			db.FindProp("COLLATE").Value = "SQL_Latin1_General_CP1_CI_AS";
 			db.FindProp("AUTO_CLOSE").Value = "OFF";
 			db.FindProp("AUTO_SHRINK").Value = "ON";
@@ -448,6 +453,10 @@ select * from Table1
 
 			db.DataTables.Add(formType);
 			db.Dir = db.Name;
+
+			if (Directory.Exists(db.Dir))
+				Directory.Delete(db.Dir, true);
+
 			db.ScriptToDir();
 			Assert.IsTrue(Directory.Exists(db.Name));
 			Assert.IsTrue(Directory.Exists(db.Name + "\\data"));
@@ -460,6 +469,9 @@ select * from Table1
 			foreach (var t in db.Tables) {
 				Assert.IsTrue(File.Exists(db.Name + "\\tables\\" + t.Name + ".sql"));
 			}
+			foreach (var t in db.TableTypes) {
+				Assert.IsTrue(File.Exists(db.Name + "\\table_types\\TYPE_" + t.Name + ".sql"));
+			}
 			foreach (var expected in db.ForeignKeys.Select(fk => db.Name + "\\foreign_keys\\" + fk.Table.Name + ".sql")) {
 				Assert.IsTrue(File.Exists(expected), "File does not exist" + expected);
 			}
@@ -470,6 +482,54 @@ select * from Table1
 			copy.CreateFromDir(true);
 			copy.Load();
 			TestCompare(db, copy);
+		}
+
+		[Test]
+		public void TestScriptToDirOnlyCreatesNecessaryFolders()
+		{
+			var db = new Database("TestEmptyDB");
+
+			db.Connection = ConfigHelper.TestDB.Replace("database=TESTDB", "database=" + db.Name);
+
+			db.ExecCreate(true);
+
+			db.Dir = db.Name;
+			db.Load();
+
+			if (Directory.Exists(db.Dir)) // if the directory exists, delete it to make it a fair test
+			{
+				Directory.Delete(db.Dir, true);
+			}
+
+			db.ScriptToDir();
+
+			Assert.AreEqual(0, db.Assemblies.Count);
+			Assert.AreEqual(0, db.DataTables.Count);
+			Assert.AreEqual(0, db.ForeignKeys.Count);
+			Assert.AreEqual(0, db.Routines.Count);
+			Assert.AreEqual(0, db.Schemas.Count);
+			Assert.AreEqual(0, db.Synonyms.Count);
+			Assert.AreEqual(0, db.Tables.Count);
+			Assert.AreEqual(0, db.TableTypes.Count);
+			Assert.AreEqual(0, db.Users.Count);
+			Assert.AreEqual(0, db.ViewIndexes.Count);
+
+			Assert.IsTrue(Directory.Exists(db.Name));
+			Assert.IsTrue(File.Exists(db.Name + "\\props.sql"));
+			//Assert.IsFalse(File.Exists(db.Name + "\\schemas.sql"));
+
+			Assert.IsFalse(Directory.Exists(db.Name + "\\assemblies"));
+			Assert.IsFalse(Directory.Exists(db.Name + "\\data"));
+			Assert.IsFalse(Directory.Exists(db.Name + "\\foreign_keys"));
+			foreach (var routineType in Enum.GetNames(typeof(Routine.RoutineKind)))
+			{
+				var dir = routineType.ToLower() + "s";
+				Assert.IsFalse(Directory.Exists(db.Name + "\\" + dir));
+			}
+			Assert.IsFalse(Directory.Exists(db.Name + "\\synonyms"));
+			Assert.IsFalse(Directory.Exists(db.Name + "\\tables"));
+			Assert.IsFalse(Directory.Exists(db.Name + "\\table_types"));
+			Assert.IsFalse(Directory.Exists(db.Name + "\\users"));
 		}
 	}
 }
